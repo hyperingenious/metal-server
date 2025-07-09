@@ -2,7 +2,7 @@ const sdk = require("node-appwrite");
 const {
   APPWRITE_CLOUD_URL,
   APPWRITE_PROJECT_ID,
-} = require("../appwrite/appwrite");
+} = require("../appwrite/appwriteConstants");
 
 const verifyAppwriteJWT = async (req, res, next) => {
   const token = req.headers.authorization?.split(" ")[1];
