@@ -1,7 +1,7 @@
 // routes.js
 
 const { verifyAppwriteJWT } = require("./middlewares/verifyClientJWT");
-const { getNextBatchProfiles } = require("./service/profileService");
+const { getNextBatchProfiles, getRandomProfilesSimple } = require("./service/profileService");
 const { sendInvitation } = require("./service/invitationService");
 const { getActiveSentInvitations } = require("./service/manageSentInvitationService");
 const { getActiveReceivedInvitations, declineInvitation, acceptInvitation } = require("./service/manageIncomingRequestService");
@@ -37,6 +37,24 @@ module.exports = (app) => {
       res.status(500).json({ error: "Failed to fetch profiles" });
     }
   });
+
+  app.get("/api/v1/profiles/random-simple", async (req, res) => {
+        try {
+            // const currentUserId = req.user.$id;
+            const currentUserId = "687340b017c679c3e4e6";
+            const limit = req.query.limit ? parseInt(req.query.limit) : 10;
+
+            if (isNaN(limit) || limit <= 0) {
+                return res.status(400).json({ error: "Invalid limit parameter. Must be a positive number." });
+            }
+
+            const profiles = await getRandomProfilesSimple(currentUserId, limit);
+            res.status(200).json({ profiles });
+        } catch (error) {
+            console.error("Error fetching simple random profiles:", error.message);
+            res.status(error.code || 500).json({ error: error.message || "Failed to fetch simple random profiles" });
+        }
+    });
 
   app.post("/api/v1/notification/invitations/send",verifyAppwriteJWT, async (req, res) => {
     const senderUserId = req.user.$id;
