@@ -141,7 +141,7 @@ const getNextBatchProfiles = async (userId, page = 0) => {
         // Extract the actual user ID from the biodata relationship object
         const currentProfileUserId = bio.user.$id;
 
-        // Apply preference filters (age, gender, hobbies)
+        // Apply preference filters (age, gender)
         if (bio.age < preference.min_age || bio.age > preference.max_age) continue;
         if (preference.preferred_gender && bio.gender !== preference.preferred_gender) continue;
 
@@ -149,12 +149,12 @@ const getNextBatchProfiles = async (userId, page = 0) => {
         const userHobbyIds = Array.isArray(bio.hobbies)
             ? bio.hobbies.map(h => h ? h.$id : null).filter(Boolean)
             : [];
-        const preferredHobbyIds = Array.isArray(preference.preferred_hobbies)
-            ? preference.preferred_hobbies.map(h => h ? h.$id : null).filter(Boolean)
-            : [];
+        // The following lines are kept for enrichment, but not for filtering
+        // const preferredHobbyIds = Array.isArray(preference.preferred_hobbies)
+        //     ? preference.preferred_hobbies.map(h => h ? h.$id : null).filter(Boolean)
+        //     : [];
 
-        const hasCommonHobbies = userHobbyIds.some(hid => preferredHobbyIds.includes(hid));
-        if (preferredHobbyIds.length > 0 && !hasCommonHobbies) continue;
+        // No longer filter by common hobbies
 
         // Find location for this specific profile, add null-check for loc.user
         const location = allLocationDocs.documents.find(loc => loc.user && loc.user.$id === currentProfileUserId);
@@ -196,4 +196,4 @@ const getNextBatchProfiles = async (userId, page = 0) => {
 
 module.exports = {
     getNextBatchProfiles
-};
+}
