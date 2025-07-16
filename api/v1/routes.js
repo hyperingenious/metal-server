@@ -1,5 +1,4 @@
 // routes.js
-
 const { verifyAppwriteJWT } = require("./middlewares/verifyClientJWT");
 const { getNextBatchProfiles, getRandomProfilesSimple } = require("./service/profileService");
 const { sendInvitation } = require("./service/invitationService");
@@ -15,6 +14,7 @@ const {
     getChatMessages 
 } = require("./service/chatService");
 const { removeSentInvitation } = require("./service/manageSentInvitationService");
+const { createNotification } = require("./service/notificationService");
 
 module.exports = (app) => {
 
@@ -38,10 +38,9 @@ module.exports = (app) => {
     }
   });
 
-  app.get("/api/v1/profiles/random-simple", async (req, res) => {
+  app.get("/api/v1/profiles/random-simple", verifyAppwriteJWT, async (req, res) => {
         try {
-            // const currentUserId = req.user.$id;
-            const currentUserId = "687340b017c679c3e4e6";
+            const currentUserId = req.user.$id;
             const limit = req.query.limit ? parseInt(req.query.limit) : 10;
 
             if (isNaN(limit) || limit <= 0) {
@@ -66,7 +65,8 @@ module.exports = (app) => {
 
     try {
       const result = await sendInvitation(senderUserId, receiverUserId);
-      res.status(200).json({ message: "Invitation sent", ...result });
+      await createNotification(receiverUserId,senderUserId, 'invite', "You have an invitation.")
+      return res.status(200).json({ message: "Invitation sent", ...result });
     } catch (err) {
       const code = err.code === 403 ? 403 : 500;
       res.status(code).json({ error: err.message });
@@ -83,7 +83,6 @@ module.exports = (app) => {
       res.status(500).json({ error: 'Failed to fetch active invitations' });
     }
   });
-
 
   app.post('/api/v1/notification/invitations/remove-sent',verifyAppwriteJWT, async (req, res) => {
   try {
@@ -103,7 +102,6 @@ module.exports = (app) => {
   }
   });
 
-
   app.get("/api/v1/notification/invitations/received/active",verifyAppwriteJWT, async (req, res) => {
         try {
             const receiverUserId = req.user.$id;
@@ -115,7 +113,7 @@ module.exports = (app) => {
         }
     });
 
-    app.post("/api/v1/notification/invitations/decline",verifyAppwriteJWT, async (req, res) => {
+  app.post("/api/v1/notification/invitations/decline",verifyAppwriteJWT, async (req, res) => {
         try {
             const receiverUserId = req.user.$id;
             const { connectionId } = req.body;
@@ -133,7 +131,7 @@ module.exports = (app) => {
         }
     });
 
-    app.post("/api/v1/notification/invitations/accept",verifyAppwriteJWT, async (req, res) => {
+  app.post("/api/v1/notification/invitations/accept",verifyAppwriteJWT, async (req, res) => {
         try {
             const receiverUserId = req.user.$id;
             const { connectionId } = req.body;
@@ -157,6 +155,7 @@ module.exports = (app) => {
     try {
       const currentUserId = req.user.$id;
       const chats = await getActiveChats(currentUserId);
+      console.log(chats);
       res.status(200).json({ chats });
     } catch (error) {
       console.error("Error fetching active chats:", error.message);
@@ -182,7 +181,7 @@ module.exports = (app) => {
 
 
   // Get Chat State
-  app.get("/api/v1/chats/:connectionId/chat-state",verifyAppwriteJWT, async (req, res) => {
+ app.get("/api/v1/chats/:connectionId/chat-state",verifyAppwriteJWT, async (req, res) => {
     try {
       const currentUserId = req.user.$id;
       const connectionId = req.params.connectionId;
@@ -196,7 +195,7 @@ module.exports = (app) => {
   });
 
   // Send Message
-  app.post("/api/v1/chats/:connectionId/messages",verifyAppwriteJWT, async (req, res) => {
+ app.post("/api/v1/chats/:connectionId/messages",verifyAppwriteJWT, async (req, res) => {
     try {
       const currentUserId = req.user.$id;
       const connectionId = req.params.connectionId;
@@ -237,7 +236,7 @@ module.exports = (app) => {
   });
 
   // Respond to Date Proposal
-  app.post("/api/v1/chats/:connectionId/respond-date",verifyAppwriteJWT, async (req, res) => {
+ app.post("/api/v1/chats/:connectionId/respond-date",verifyAppwriteJWT, async (req, res) => {
     try {
       
       const currentUserId = req.user.$id;
@@ -259,7 +258,7 @@ module.exports = (app) => {
     }
   });
 
-  app.get("/api/v1/chats/:connectionId/messages",verifyAppwriteJWT, async (req, res) => {
+ app.get("/api/v1/chats/:connectionId/messages",verifyAppwriteJWT, async (req, res) => {
     try {
 
       const connectionId = req.params.connectionId;

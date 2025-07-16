@@ -33,12 +33,12 @@ const sendInvitation = async (senderUserId, receiverUserId) => {
   });
 
   // Update has-shown (sender's view of receiver)
-  const senderHasShown = await appwrite.getDocumentByRelation(APPWRITE_HAS_SHOWN_COLLECTION_ID, 'user', senderUserId);
-  if (senderHasShown) {
-    await appwrite.updateDocument(APPWRITE_HAS_SHOWN_COLLECTION_ID, senderHasShown.$id, {
-      is_invited: true,
-    });
-  }
+  // const senderHasShown = await appwrite.getDocumentByRelation(APPWRITE_HAS_SHOWN_COLLECTION_ID, 'user', senderUserId);
+  // if (senderHasShown) {
+  //   await appwrite.updateDocument(APPWRITE_HAS_SHOWN_COLLECTION_ID, senderHasShown.$id, {
+  //     is_invited: true,
+  //   });
+  // }
 
   // Update receiver's activeReceivedInvitationCount
   const receiver = await appwrite.getDocumentByRelation(APPWRITE_USERS_COLLECTION_ID, '$id', receiverUserId);
@@ -65,6 +65,8 @@ const sendInvitation = async (senderUserId, receiverUserId) => {
 
   return { success: true, visibleToReceiver: isReceiverUnderLimit };
 };
+
+
 
 module.exports = {
   sendInvitation,

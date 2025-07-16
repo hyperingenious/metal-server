@@ -1,5 +1,3 @@
-// api/v1/service/profileService.js
-
 const { AppwriteService } = require('../appwrite/appwriteService');
 const haversine = require('../utils/haversine');
 const { Query } = require('node-appwrite');
@@ -10,9 +8,7 @@ const {
     APPWRITE_BIODATA_COLLECTION_ID,
     APPWRITE_IMAGES_COLLECTION_ID,
     APPWRITE_HOBBIES_COLLECTION_ID,
-    APPWRITE_USERS_COLLECTION_ID
 } = require('../appwrite/appwriteConstants');
-
 
 const PAGE_SIZE = 25;
 
