@@ -155,7 +155,6 @@ module.exports = (app) => {
     try {
       const currentUserId = req.user.$id;
       const chats = await getActiveChats(currentUserId);
-      console.log(chats);
       res.status(200).json({ chats });
     } catch (error) {
       console.error("Error fetching active chats:", error.message);
@@ -178,7 +177,6 @@ module.exports = (app) => {
       res.status(error.code || 500).json({ error: error.message || "Failed to remove chat" });
     }
   });
-
 
   // Get Chat State
  app.get("/api/v1/chats/:connectionId/chat-state",verifyAppwriteJWT, async (req, res) => {
@@ -204,6 +202,7 @@ module.exports = (app) => {
       if (!content || !messageType) {
         return res.status(400).json({ error: "Message content and type are required." });
       }
+
       if (!['text', 'image'].includes(messageType)) {
         return res.status(400).json({ error: "Invalid message type. Must be 'text' or 'image'." });
       }
@@ -260,16 +259,14 @@ module.exports = (app) => {
 
  app.get("/api/v1/chats/:connectionId/messages",verifyAppwriteJWT, async (req, res) => {
     try {
-
+      console.log("gotten this response")
       const connectionId = req.params.connectionId;
-
       const messages = await getChatMessages(connectionId);
+      console.log({messages})
       res.status(200).json({ messages });
     } catch (error) {
       console.error("Error fetching chat messages:", error.message);
       res.status(error.code || 500).json({ error: error.message || "Failed to fetch chat messages" });
     }
   });
-
-  
 };
