@@ -380,14 +380,7 @@ const sendMessage = async (
           );
         }
       }
-        console.log({
-          message: newMessageData.message,
-          senderId: newMessageData.senderId,
-          messageType: newMessageData.messageType,
-          is_image: newMessageData.is_image,
-          imageUrl: newMessageData.imageUrl,
-        });
- 
+
       await appwrite.updateDocument(
         APPWRITE_MESSAGES_INBOX_COLLECTION_ID,
         connectionId,
