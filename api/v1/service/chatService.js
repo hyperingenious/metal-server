@@ -62,8 +62,8 @@ const getActiveChats = async (currentUserId) => {
           ? conn.receiverId.$id
           : null
         : conn.senderId
-        ? conn.senderId.$id
-        : null;
+          ? conn.senderId.$id
+          : null;
 
     if (!partnerId) {
       console.warn(`Could not determine partner ID for connection ${conn.$id}`);
@@ -261,16 +261,16 @@ const getChatState = async (currentUserId, connectionId) => {
     // Ensure date and place are null if no proposal or accepted/rejected
     dateProposalDate:
       connectionDoc.dateProposalStatus &&
-      ["proposed", "modified", "accepted"].includes(
-        connectionDoc.dateProposalStatus
-      )
+        ["proposed", "modified", "accepted"].includes(
+          connectionDoc.dateProposalStatus
+        )
         ? connectionDoc.dateProposalDate
         : null,
     dateProposalPlace:
       connectionDoc.dateProposalStatus &&
-      ["proposed", "modified", "accepted"].includes(
-        connectionDoc.dateProposalStatus
-      )
+        ["proposed", "modified", "accepted"].includes(
+          connectionDoc.dateProposalStatus
+        )
         ? connectionDoc.dateProposalPlace
         : null,
     dateProposalProposerId: connectionDoc.dateProposalProposerId
@@ -369,7 +369,7 @@ const sendMessage = async (
       if (!inboxDoc.documents || inboxDoc.documents.length === 0) {
         try {
           await appwrite.createDocument(
-        APPWRITE_MESSAGES_INBOX_COLLECTION_ID,
+            APPWRITE_MESSAGES_INBOX_COLLECTION_ID,
             { is_image: null },
             connectionId, // documentId
           );
@@ -641,9 +641,12 @@ const getChatMessages = async (connectionId) => {
     [
       Query.equal("connectionId", connectionId),
       Query.orderAsc("timestamp"), // Use timestamp for ordering
-      Query.limit(100), // Only fetch up to the message limit
+      Query.limit(200), // Only fetch up to the message limit
     ]
   );
+
+  console.log(messages.total);
+
   return messages.documents;
 };
 

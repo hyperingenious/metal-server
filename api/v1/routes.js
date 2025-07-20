@@ -5,13 +5,13 @@ const { sendInvitation } = require("./service/invitationService");
 const { getActiveSentInvitations } = require("./service/manageSentInvitationService");
 const { getActiveReceivedInvitations, declineInvitation, acceptInvitation } = require("./service/manageIncomingRequestService");
 const {
-    getActiveChats,
-    removeChat,
-    getChatState,
-    sendMessage,
-    proposeDate,
-    respondToDateProposal,
-    getChatMessages 
+  getActiveChats,
+  removeChat,
+  getChatState,
+  sendMessage,
+  proposeDate,
+  respondToDateProposal,
+  getChatMessages
 } = require("./service/chatService");
 const { removeSentInvitation } = require("./service/manageSentInvitationService");
 const { createNotification } = require("./service/notificationService");
@@ -26,7 +26,7 @@ module.exports = (app) => {
     });
   });
 
-  app.get("/api/v1/explore/next-batch",verifyAppwriteJWT, async (req, res) => {
+  app.get("/api/v1/explore/next-batch", verifyAppwriteJWT, async (req, res) => {
     try {
       const page = parseInt(req.query.page || "0");
       const userId = req.user.$id;
@@ -39,23 +39,23 @@ module.exports = (app) => {
   });
 
   app.get("/api/v1/profiles/random-simple", verifyAppwriteJWT, async (req, res) => {
-        try {
-            const currentUserId = req.user.$id;
-            const limit = req.query.limit ? parseInt(req.query.limit) : 10;
+    try {
+      const currentUserId = req.user.$id;
+      const limit = req.query.limit ? parseInt(req.query.limit) : 10;
 
-            if (isNaN(limit) || limit <= 0) {
-                return res.status(400).json({ error: "Invalid limit parameter. Must be a positive number." });
-            }
+      if (isNaN(limit) || limit <= 0) {
+        return res.status(400).json({ error: "Invalid limit parameter. Must be a positive number." });
+      }
 
-            const profiles = await getRandomProfilesSimple(currentUserId, limit);
-            res.status(200).json({ profiles });
-        } catch (error) {
-            console.error("Error fetching simple random profiles:", error.message);
-            res.status(error.code || 500).json({ error: error.message || "Failed to fetch simple random profiles" });
-        }
-    });
+      const profiles = await getRandomProfilesSimple(currentUserId, limit);
+      res.status(200).json({ profiles });
+    } catch (error) {
+      console.error("Error fetching simple random profiles:", error.message);
+      res.status(error.code || 500).json({ error: error.message || "Failed to fetch simple random profiles" });
+    }
+  });
 
-  app.post("/api/v1/notification/invitations/send",verifyAppwriteJWT, async (req, res) => {
+  app.post("/api/v1/notification/invitations/send", verifyAppwriteJWT, async (req, res) => {
     const senderUserId = req.user.$id;
     const { receiverUserId } = req.body;
 
@@ -65,7 +65,7 @@ module.exports = (app) => {
 
     try {
       const result = await sendInvitation(senderUserId, receiverUserId);
-      await createNotification(receiverUserId,senderUserId, 'invite', "You have an invitation.")
+      await createNotification(receiverUserId, senderUserId, 'invite', "You have an invitation.")
       return res.status(200).json({ message: "Invitation sent", ...result });
     } catch (err) {
       const code = err.code === 403 ? 403 : 500;
@@ -73,7 +73,7 @@ module.exports = (app) => {
     }
   });
 
-  app.get('/api/v1/notification/invitations/active',verifyAppwriteJWT, async (req, res) => {
+  app.get('/api/v1/notification/invitations/active', verifyAppwriteJWT, async (req, res) => {
     try {
       const userId = req.user.$id;
       const invitations = await getActiveSentInvitations(userId);
@@ -84,74 +84,74 @@ module.exports = (app) => {
     }
   });
 
-  app.post('/api/v1/notification/invitations/remove-sent',verifyAppwriteJWT, async (req, res) => {
-  try {
-    const senderUserId = req.user.$id;
-    const { connectionId } = req.body;
+  app.post('/api/v1/notification/invitations/remove-sent', verifyAppwriteJWT, async (req, res) => {
+    try {
+      const senderUserId = req.user.$id;
+      const { connectionId } = req.body;
 
-    if (!connectionId) {
-      return res.status(400).json({ error: "connectionId is required" });
+      if (!connectionId) {
+        return res.status(400).json({ error: "connectionId is required" });
+      }
+
+      const result = await removeSentInvitation(senderUserId, connectionId);
+      res.status(200).json({ message: "Invitation removed", ...result });
+
+    } catch (err) {
+      console.error("Error removing invitation:", err.message);
+      res.status(500).json({ error: err.message || "Failed to remove invitation" });
     }
-
-    const result = await removeSentInvitation(senderUserId, connectionId);
-    res.status(200).json({ message: "Invitation removed", ...result });
-
-  } catch (err) {
-    console.error("Error removing invitation:", err.message);
-    res.status(500).json({ error: err.message || "Failed to remove invitation" });
-  }
   });
 
-  app.get("/api/v1/notification/invitations/received/active",verifyAppwriteJWT, async (req, res) => {
-        try {
-            const receiverUserId = req.user.$id;
-            const invitations = await getActiveReceivedInvitations(receiverUserId);
-            res.status(200).json({ invitations });
-        } catch (error) {
-            console.error("Error fetching received invitations:", error.message);
-            res.status(500).json({ error: "Failed to fetch received invitations" });
-        }
-    });
+  app.get("/api/v1/notification/invitations/received/active", verifyAppwriteJWT, async (req, res) => {
+    try {
+      const receiverUserId = req.user.$id;
+      const invitations = await getActiveReceivedInvitations(receiverUserId);
+      res.status(200).json({ invitations });
+    } catch (error) {
+      console.error("Error fetching received invitations:", error.message);
+      res.status(500).json({ error: "Failed to fetch received invitations" });
+    }
+  });
 
-  app.post("/api/v1/notification/invitations/decline",verifyAppwriteJWT, async (req, res) => {
-        try {
-            const receiverUserId = req.user.$id;
-            const { connectionId } = req.body;
+  app.post("/api/v1/notification/invitations/decline", verifyAppwriteJWT, async (req, res) => {
+    try {
+      const receiverUserId = req.user.$id;
+      const { connectionId } = req.body;
 
-            if (!connectionId) {
-                return res.status(400).json({ error: "connectionId is required" });
-            }
+      if (!connectionId) {
+        return res.status(400).json({ error: "connectionId is required" });
+      }
 
-            const result = await declineInvitation(receiverUserId, connectionId);
-            res.status(200).json({ message: "Invitation declined", ...result });
-        } catch (err) {
-            console.error("Error declining invitation:", err.message);
-            const code = err.code === 403 ? 403 : 500;
-            res.status(code).json({ error: err.message || "Failed to decline invitation" });
-        }
-    });
+      const result = await declineInvitation(receiverUserId, connectionId);
+      res.status(200).json({ message: "Invitation declined", ...result });
+    } catch (err) {
+      console.error("Error declining invitation:", err.message);
+      const code = err.code === 403 ? 403 : 500;
+      res.status(code).json({ error: err.message || "Failed to decline invitation" });
+    }
+  });
 
-  app.post("/api/v1/notification/invitations/accept",verifyAppwriteJWT, async (req, res) => {
-        try {
-            const receiverUserId = req.user.$id;
-            const { connectionId } = req.body;
+  app.post("/api/v1/notification/invitations/accept", verifyAppwriteJWT, async (req, res) => {
+    try {
+      const receiverUserId = req.user.$id;
+      const { connectionId } = req.body;
 
-            if (!connectionId) {
-                return res.status(400).json({ error: "connectionId is required" });
-            }
+      if (!connectionId) {
+        return res.status(400).json({ error: "connectionId is required" });
+      }
 
-            const result = await acceptInvitation(receiverUserId, connectionId);
-            res.status(200).json({ message: "Invitation accepted", ...result });
-        } catch (err) {
-            console.error("Error accepting invitation:", err.message);
-            const code = err.code === 403 ? 403 : 500;
-            res.status(code).json({ error: err.message || "Failed to accept invitation" });
-        }
-    });
+      const result = await acceptInvitation(receiverUserId, connectionId);
+      res.status(200).json({ message: "Invitation accepted", ...result });
+    } catch (err) {
+      console.error("Error accepting invitation:", err.message);
+      const code = err.code === 403 ? 403 : 500;
+      res.status(code).json({ error: err.message || "Failed to accept invitation" });
+    }
+  });
 
   // Chat Management Routes
   // Get Active Chats
-  app.get("/api/v1/chats/active",verifyAppwriteJWT, async (req, res) => {
+  app.get("/api/v1/chats/active", verifyAppwriteJWT, async (req, res) => {
     try {
       const currentUserId = req.user.$id;
       const chats = await getActiveChats(currentUserId);
@@ -163,7 +163,7 @@ module.exports = (app) => {
   });
 
   // Remove Active Chat
-  app.post("/api/v1/chats/remove",verifyAppwriteJWT, async (req, res) => {
+  app.post("/api/v1/chats/remove", verifyAppwriteJWT, async (req, res) => {
     try {
       const currentUserId = req.user.$id;
       const { connectionId } = req.body;
@@ -179,7 +179,7 @@ module.exports = (app) => {
   });
 
   // Get Chat State
- app.get("/api/v1/chats/:connectionId/chat-state",verifyAppwriteJWT, async (req, res) => {
+  app.get("/api/v1/chats/:connectionId/chat-state", verifyAppwriteJWT, async (req, res) => {
     try {
       const currentUserId = req.user.$id;
       const connectionId = req.params.connectionId;
@@ -193,7 +193,7 @@ module.exports = (app) => {
   });
 
   // Send Message
- app.post("/api/v1/chats/:connectionId/messages",verifyAppwriteJWT, async (req, res) => {
+  app.post("/api/v1/chats/:connectionId/messages", verifyAppwriteJWT, async (req, res) => {
     try {
       const currentUserId = req.user.$id;
       const connectionId = req.params.connectionId;
@@ -216,7 +216,7 @@ module.exports = (app) => {
   });
 
   // Propose Date
-  app.post("/api/v1/chats/:connectionId/propose-date",verifyAppwriteJWT, async (req, res) => {
+  app.post("/api/v1/chats/:connectionId/propose-date", verifyAppwriteJWT, async (req, res) => {
     try {
       const currentUserId = req.user.$id;
       const connectionId = req.params.connectionId;
@@ -235,9 +235,9 @@ module.exports = (app) => {
   });
 
   // Respond to Date Proposal
- app.post("/api/v1/chats/:connectionId/respond-date",verifyAppwriteJWT, async (req, res) => {
+  app.post("/api/v1/chats/:connectionId/respond-date", verifyAppwriteJWT, async (req, res) => {
     try {
-      
+
       const currentUserId = req.user.$id;
       const connectionId = req.params.connectionId;
       const { responseType, newDetails } = req.body;
@@ -257,12 +257,11 @@ module.exports = (app) => {
     }
   });
 
- app.get("/api/v1/chats/:connectionId/messages",verifyAppwriteJWT, async (req, res) => {
+  app.get("/api/v1/chats/:connectionId/messages", verifyAppwriteJWT, async (req, res) => {
     try {
       console.log("gotten this response")
       const connectionId = req.params.connectionId;
       const messages = await getChatMessages(connectionId);
-      console.log({messages})
       res.status(200).json({ messages });
     } catch (error) {
       console.error("Error fetching chat messages:", error.message);
