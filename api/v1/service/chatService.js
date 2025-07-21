@@ -62,8 +62,8 @@ const getActiveChats = async (currentUserId) => {
           ? conn.receiverId.$id
           : null
         : conn.senderId
-          ? conn.senderId.$id
-          : null;
+        ? conn.senderId.$id
+        : null;
 
     if (!partnerId) {
       console.warn(`Could not determine partner ID for connection ${conn.$id}`);
@@ -261,16 +261,16 @@ const getChatState = async (currentUserId, connectionId) => {
     // Ensure date and place are null if no proposal or accepted/rejected
     dateProposalDate:
       connectionDoc.dateProposalStatus &&
-        ["proposed", "modified", "accepted"].includes(
-          connectionDoc.dateProposalStatus
-        )
+      ["proposed", "modified", "accepted"].includes(
+        connectionDoc.dateProposalStatus
+      )
         ? connectionDoc.dateProposalDate
         : null,
     dateProposalPlace:
       connectionDoc.dateProposalStatus &&
-        ["proposed", "modified", "accepted"].includes(
-          connectionDoc.dateProposalStatus
-        )
+      ["proposed", "modified", "accepted"].includes(
+        connectionDoc.dateProposalStatus
+      )
         ? connectionDoc.dateProposalPlace
         : null,
     dateProposalProposerId: connectionDoc.dateProposalProposerId
@@ -371,7 +371,7 @@ const sendMessage = async (
           await appwrite.createDocument(
             APPWRITE_MESSAGES_INBOX_COLLECTION_ID,
             { is_image: null },
-            connectionId, // documentId
+            connectionId // documentId
           );
         } catch (e) {
           console.error(
@@ -393,7 +393,10 @@ const sendMessage = async (
         }
       );
     } catch (e) {
-      console.error("Error in createChatInboxOnLoad:", e.message || e.toString());
+      console.error(
+        "Error in createChatInboxOnLoad:",
+        e.message || e.toString()
+      );
     }
   }; // <-- FIXED: closed function
 
@@ -455,10 +458,43 @@ const proposeDate = async (currentUserId, connectionId, proposalDetails) => {
   // Create a new message document for the proposal event
   // Format the date to a more human-readable string (e.g., "July 24, 2025 at 18:47")
   const dateObj = new Date(proposalDetails.date);
-  const options = { year: 'numeric', month: 'long', day: 'numeric' };
+  const options = { year: "numeric", month: "long", day: "numeric" };
   const datePart = dateObj.toLocaleDateString(undefined, options);
-  const timePart = dateObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+  const timePart = dateObj.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
   const proposalMessageText = `Proposed a date for ${datePart} at ${timePart} at ${proposalDetails.place}.`;
+
+  const inboxDoc = await appwrite.listDocuments(
+    APPWRITE_MESSAGES_INBOX_COLLECTION_ID,
+    [Query.equal("$id", connectionId)]
+  );
+
+  if (!inboxDoc.documents || inboxDoc.documents.length === 0) {
+    try {
+      await appwrite.createDocument(
+        APPWRITE_MESSAGES_INBOX_COLLECTION_ID,
+        { is_image: null },
+        connectionId // documentId
+      );
+    } catch (e) {
+      console.error("Failed to create chat inbox:", e.message || e.toString());
+    }
+  }
+
+  await appwrite.updateDocument(
+    APPWRITE_MESSAGES_INBOX_COLLECTION_ID,
+    connectionId,
+    {
+      message: proposalMessageText,
+      senderId: currentUserId,
+      messageType: "date_proposal",
+      is_image: null,
+      image_url: null,
+    }
+  );
 
   await appwrite.createDocument(
     APPWRITE_MESSAGES_COLLECTION_ID,
@@ -597,12 +633,11 @@ const respondToDateProposal = async (
       };
       responseMessageText = `Modified the date proposal to ${newDetails.date} at ${newDetails.place}.`;
       break;
-    default:
-      {
-        const error = new Error("Invalid response type.");
-        error.code = 400;
-        throw error;
-      }
+    default: {
+      const error = new Error("Invalid response type.");
+      error.code = 400;
+      throw error;
+    }
   }
 
   // Create a new message document for the response event
