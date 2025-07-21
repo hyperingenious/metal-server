@@ -492,7 +492,7 @@ const proposeDate = async (currentUserId, connectionId, proposalDetails) => {
       senderId: currentUserId,
       messageType: "date_proposal",
       is_image: null,
-      image_url: null,
+      imageUrl: null,
     }
   );
 
