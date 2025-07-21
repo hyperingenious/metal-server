@@ -453,7 +453,12 @@ const proposeDate = async (currentUserId, connectionId, proposalDetails) => {
   }
 
   // Create a new message document for the proposal event
-  const proposalMessageText = `Proposed a date for ${proposalDetails.date} at ${proposalDetails.place}.`;
+  // Format the date to a more human-readable string (e.g., "July 24, 2025 at 18:47")
+  const dateObj = new Date(proposalDetails.date);
+  const options = { year: 'numeric', month: 'long', day: 'numeric' };
+  const datePart = dateObj.toLocaleDateString(undefined, options);
+  const timePart = dateObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+  const proposalMessageText = `Proposed a date for ${datePart} at ${timePart} at ${proposalDetails.place}.`;
 
   await appwrite.createDocument(
     APPWRITE_MESSAGES_COLLECTION_ID,
