@@ -4,15 +4,7 @@ const { getNextBatchProfiles, getRandomProfilesSimple } = require("./service/pro
 const { sendInvitation } = require("./service/invitationService");
 const { getActiveSentInvitations } = require("./service/manageSentInvitationService");
 const { getActiveReceivedInvitations, declineInvitation, acceptInvitation } = require("./service/manageIncomingRequestService");
-const {
-  getActiveChats,
-  removeChat,
-  getChatState,
-  sendMessage,
-  proposeDate,
-  respondToDateProposal,
-  getChatMessages
-} = require("./service/chatService");
+const { getActiveChats, removeChat, getChatState, sendMessage, proposeDate, respondToDateProposal, getChatMessages } = require("./service/chatService");
 const { removeSentInvitation } = require("./service/manageSentInvitationService");
 const { createNotification } = require("./service/notificationService");
 
@@ -237,7 +229,6 @@ module.exports = (app) => {
   // Respond to Date Proposal
   app.post("/api/v1/chats/:connectionId/respond-date", verifyAppwriteJWT, async (req, res) => {
     try {
-
       const currentUserId = req.user.$id;
       const connectionId = req.params.connectionId;
       const { responseType, newDetails } = req.body;

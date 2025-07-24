@@ -541,11 +541,7 @@ const proposeDate = async (currentUserId, connectionId, proposalDetails) => {
  * @param {Object} [newDetails] New date/place if responseType is 'modify'.
  * @returns {Promise<Object>} The updated connection document.
  */
-const respondToDateProposal = async (
-  currentUserId,
-  connectionId,
-  responseType,
-  newDetails = {}
+const respondToDateProposal = async ( currentUserId, connectionId, responseType, newDetails = {}
 ) => {
   const appwrite = new AppwriteService();
 
