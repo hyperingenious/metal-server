@@ -226,14 +226,26 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
       .filter(Boolean)
   );
 
-  // 2. Fetch all biodata documents (potential candidates), excluding current user and viewed users.
-  // Fetch a sufficiently large number to allow for effective randomization.
+  // 2. Fetch current user's biodata to get their gender
+  const currentUserBiodataRes = await appwrite.listDocuments(
+    APPWRITE_BIODATA_COLLECTION_ID,
+    [Query.equal("user", currentUserId), Query.limit(1)]
+  );
+  if (!currentUserBiodataRes.documents.length) {
+    // If no biodata for current user, return empty
+    return [];
+  }
+  const currentUserGender = currentUserBiodataRes.documents[0].gender;
+
+  // 3. Fetch all biodata documents (potential candidates), excluding current user and viewed users,
+  //    and only include users with a different gender than the current user.
+  //    Fetch a sufficiently large number to allow for effective randomization.
   const allBiodataDocsRes = await appwrite.listDocuments(
     APPWRITE_BIODATA_COLLECTION_ID,
     [
       Query.notEqual("user", currentUserId), // Exclude the current user
+      Query.notEqual("gender", currentUserGender), // Exclude same gender
       Query.limit(5000), // Adjust this limit based on your expected total user count.
-      // This is where performance can be an issue with millions of users.
     ]
   );
 
@@ -248,7 +260,7 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
     return [];
   }
 
-  // 3. Shuffle the eligible biodata documents for randomization (Fisher-Yates)
+  // 4. Shuffle the eligible biodata documents for randomization (Fisher-Yates)
   for (let i = eligibleBiodataDocs.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [eligibleBiodataDocs[i], eligibleBiodataDocs[j]] = [
@@ -257,7 +269,7 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
     ];
   }
 
-  // 4. Select the top 'limit' candidates after shuffling
+  // 5. Select the top 'limit' candidates after shuffling
   const selectedBiodataDocs = eligibleBiodataDocs.slice(0, limit);
 
   // If after slicing, we still have no selected profiles, return empty
@@ -269,7 +281,7 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
     .map((bio) => bio.user.$id)
     .filter(Boolean);
 
-  // 5. Fetch all enrichment data for the 'selectedUserIds'
+  // 6. Fetch all enrichment data for the 'selectedUserIds'
   // Fetch locations for selected users
   const locationDocsRes = await appwrite.listDocuments(
     APPWRITE_LOCATION_COLLECTION_ID,
@@ -302,7 +314,7 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
     hobbiesMap.set(hobby.$id, hobby);
   });
 
-  // 6. Construct the final profiles in the desired format
+  // 7. Construct the final profiles in the desired format
   const profiles = [];
   for (const bio of selectedBiodataDocs) {
     const profileUserId = bio.user.$id;
@@ -335,7 +347,7 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
     });
   }
 
-  // 7. Update has_shown for the profiles actually returned
+  // 8. Update has_shown for the profiles actually returned
   for (const profile of profiles) {
     const existingHasShownRes = await appwrite.listDocuments(
       APPWRITE_HAS_SHOWN_COLLECTION_ID,
