@@ -8,6 +8,7 @@ const {
   APPWRITE_BIODATA_COLLECTION_ID,
   APPWRITE_IMAGES_COLLECTION_ID,
   APPWRITE_HOBBIES_COLLECTION_ID,
+  APPWRITE_CONNECTIONS_COLLECTION_ID,
 } = require("../appwrite/appwriteConstants");
 
 const PAGE_SIZE = 25;
@@ -272,12 +273,11 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
   // 1. currentUserId is sender, candidate is receiver
   if (candidateUserIds.length > 0) {
     const connectionsAsSenderRes = await appwrite.listDocuments(
-      APPWRITE_CONNECTIONS_COLLECTION_ID,
-      [
-        Query.equal("senderId", currentUserId),
-        Query.equal("receiverId", candidateUserIds),
-        Query.limit(5000),
-      ]
+      APPWRITE_CONNECTIONS_COLLECTION_ID, [
+      Query.equal("senderId", currentUserId),
+      Query.equal("receiverId", candidateUserIds),
+      Query.limit(5000),
+    ]
     );
     connectionsAsSenderRes.documents.forEach((conn) => {
       if (conn.receiverId && conn.receiverId.$id) {
@@ -374,12 +374,12 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
     // Collect additional images (image_2 to image_6, only non-null)
     const additionalImages = imageDoc
       ? [
-          imageDoc.image_2,
-          imageDoc.image_3,
-          imageDoc.image_4,
-          imageDoc.image_5,
-          imageDoc.image_6,
-        ].filter(Boolean)
+        imageDoc.image_2,
+        imageDoc.image_3,
+        imageDoc.image_4,
+        imageDoc.image_5,
+        imageDoc.image_6,
+      ].filter(Boolean)
       : [];
 
     // Process hobbies similar to getNextBatchProfiles
