@@ -255,7 +255,58 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
     return userIdFromBiodata && !viewedUserIds.has(userIdFromBiodata);
   });
 
-  // If no eligible profiles, return empty
+  // --- Filter out users who already have a connection with the current user ---
+  // Gather all candidate user IDs
+  const candidateUserIds = eligibleBiodataDocs
+    .map((bio) => (bio.user ? bio.user.$id : null))
+    .filter(Boolean);
+
+  if (candidateUserIds.length === 0) {
+    return [];
+  }
+
+  // Query connections where (senderId = currentUserId AND receiverId in candidateUserIds)
+  // OR (receiverId = currentUserId AND senderId in candidateUserIds)
+  let connectedUserIds = new Set();
+
+  // 1. currentUserId is sender, candidate is receiver
+  if (candidateUserIds.length > 0) {
+    const connectionsAsSenderRes = await appwrite.listDocuments(
+      APPWRITE_CONNECTIONS_COLLECTION_ID,
+      [
+        Query.equal("senderId", currentUserId),
+        Query.equal("receiverId", candidateUserIds),
+        Query.limit(5000),
+      ]
+    );
+    connectionsAsSenderRes.documents.forEach((conn) => {
+      if (conn.receiverId && conn.receiverId.$id) {
+        connectedUserIds.add(conn.receiverId.$id);
+      }
+    });
+
+    // 2. currentUserId is receiver, candidate is sender
+    const connectionsAsReceiverRes = await appwrite.listDocuments(
+      APPWRITE_CONNECTIONS_COLLECTION_ID,
+      [
+        Query.equal("receiverId", currentUserId),
+        Query.equal("senderId", candidateUserIds),
+        Query.limit(5000),
+      ]
+    );
+    connectionsAsReceiverRes.documents.forEach((conn) => {
+      if (conn.senderId && conn.senderId.$id) {
+        connectedUserIds.add(conn.senderId.$id);
+      }
+    });
+  }
+
+  // Now filter out any biodata docs where userId is in connectedUserIds
+  eligibleBiodataDocs = eligibleBiodataDocs.filter((bio) => {
+    const userIdFromBiodata = bio.user ? bio.user.$id : null;
+    return userIdFromBiodata && !connectedUserIds.has(userIdFromBiodata);
+  });
+
   if (eligibleBiodataDocs.length === 0) {
     return [];
   }
@@ -272,7 +323,6 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
   // 5. Select the top 'limit' candidates after shuffling
   const selectedBiodataDocs = eligibleBiodataDocs.slice(0, limit);
 
-  // If after slicing, we still have no selected profiles, return empty
   if (selectedBiodataDocs.length === 0) {
     return [];
   }
