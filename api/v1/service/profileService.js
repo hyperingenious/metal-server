@@ -9,6 +9,7 @@ const {
   APPWRITE_IMAGES_COLLECTION_ID,
   APPWRITE_HOBBIES_COLLECTION_ID,
   APPWRITE_CONNECTIONS_COLLECTION_ID,
+  APPWRITE_COMPLETION_STATUS_COLLECTION_ID,
 } = require("../appwrite/appwriteConstants");
 
 const PAGE_SIZE = 25;
@@ -305,6 +306,40 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
   eligibleBiodataDocs = eligibleBiodataDocs.filter((bio) => {
     const userIdFromBiodata = bio.user ? bio.user.$id : null;
     return userIdFromBiodata && !connectedUserIds.has(userIdFromBiodata);
+  });
+
+  if (eligibleBiodataDocs.length === 0) {
+    return [];
+  }
+
+  // --- Filter out users who do not have isAllCompleted === true in completion_status ---
+  // Fetch completion_status for all eligible user IDs
+  const eligibleUserIds = eligibleBiodataDocs
+    .map((bio) => (bio.user ? bio.user.$id : null))
+    .filter(Boolean);
+
+  let completedUserIds = new Set();
+  if (eligibleUserIds.length > 0) {
+    // Fetch all completion_status docs for eligible users
+    const completionStatusRes = await appwrite.listDocuments(
+APPWRITE_COMPLETION_STATUS_COLLECTION_ID,
+      [
+        Query.equal("user", eligibleUserIds),
+        Query.equal("isAllCompleted", true),
+        Query.limit(5000),
+      ]
+    );
+    completionStatusRes.documents.forEach((doc) => {
+      if (doc.user && doc.user.$id) {
+        completedUserIds.add(doc.user.$id);
+      }
+    });
+  }
+
+  // Filter eligibleBiodataDocs to only those with isAllCompleted === true
+  eligibleBiodataDocs = eligibleBiodataDocs.filter((bio) => {
+    const userIdFromBiodata = bio.user ? bio.user.$id : null;
+    return userIdFromBiodata && completedUserIds.has(userIdFromBiodata);
   });
 
   if (eligibleBiodataDocs.length === 0) {
