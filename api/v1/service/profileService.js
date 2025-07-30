@@ -239,15 +239,13 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
   const currentUserGender = currentUserBiodataRes.documents[0].gender;
 
   // 3. Fetch all biodata documents (potential candidates), excluding current user and viewed users,
-  //    and only include users with a different gender than the current user,
-  //    and only those whose isAllCompleted is true.
+  //    and only include users with a different gender than the current user.
   //    Fetch a sufficiently large number to allow for effective randomization.
   const allBiodataDocsRes = await appwrite.listDocuments(
     APPWRITE_BIODATA_COLLECTION_ID,
     [
       Query.notEqual("user", currentUserId), // Exclude the current user
       Query.notEqual("gender", currentUserGender), // Exclude same gender
-      Query.equal("isAllCompleted", true), // Only show completed profiles
       Query.limit(5000), // Adjust this limit based on your expected total user count.
     ]
   );
