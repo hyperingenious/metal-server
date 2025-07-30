@@ -218,6 +218,7 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
   const appwrite = new AppwriteService();
 
   // 1. Get viewed user IDs from has-shown collection (still exclude seen profiles)
+  /*
   const viewedDocs = await appwrite.listDocuments(
     APPWRITE_HAS_SHOWN_COLLECTION_ID,
     [Query.equal("user", currentUserId)]
@@ -227,6 +228,7 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
       .map((doc) => (doc.who ? doc.who.$id : null))
       .filter(Boolean)
   );
+  */
 
   // 2. Fetch current user's biodata to get their gender
   const currentUserBiodataRes = await appwrite.listDocuments(
@@ -239,7 +241,7 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
   }
   const currentUserGender = currentUserBiodataRes.documents[0].gender;
 
-  // 3. Fetch all biodata documents (potential candidates), excluding current user and viewed users,
+  // 3. Fetch all biodata documents (potential candidates), excluding current user
   //    and only include users with a different gender than the current user.
   //    Fetch a sufficiently large number to allow for effective randomization.
   const allBiodataDocsRes = await appwrite.listDocuments(
@@ -254,7 +256,9 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
   let eligibleBiodataDocs = allBiodataDocsRes.documents.filter((bio) => {
     const userIdFromBiodata = bio.user ? bio.user.$id : null;
     // Exclude users who are already in the 'viewedUserIds' set
-    return userIdFromBiodata && !viewedUserIds.has(userIdFromBiodata);
+    // return userIdFromBiodata && !viewedUserIds.has(userIdFromBiodata);
+    // --- COMMENTED OUT: has-shown filtering ---
+    return userIdFromBiodata;
   });
 
   // --- Filter out users who already have a connection with the current user ---
