@@ -12,7 +12,8 @@ const {
     APPWRITE_HOBBIES_COLLECTION_ID,
     APPWRITE_CONNECTIONS_COLLECTION_ID,
     APPWRITE_COMPLETION_STATUS_COLLECTION_ID,
-    APPWRITE_PROMPTS_COLLECTION_ID // NEW IMPORT: Prompts collection
+    APPWRITE_PROMPTS_COLLECTION_ID,
+    APPWRITE_LANGUAGES_COLLECTION_ID
 } = require('../appwrite/appwriteConstants');
 
 
@@ -131,7 +132,7 @@ const getNextBatchProfiles = async (userId, page = 0) => {
         }
     });
 
-    // --- EXISTING IMAGE FETCHING LOGIC, MODIFIED TO RETURN ALL 6 IMAGES ---
+    // --- FETCH ALL 6 IMAGES ---
     const imageDocsRes = await appwrite.listDocuments(
         APPWRITE_IMAGES_COLLECTION_ID,
         [Query.equal("user", allUserIdsInBiodata), Query.limit(PAGE_SIZE * 2)]
@@ -148,6 +149,28 @@ const getNextBatchProfiles = async (userId, page = 0) => {
             imagesMap.set(img.user.$id, imageUrls);
         }
     });
+
+    // --- NEW: Fetch all languages for mapping ---
+    const uniqueLanguageIds = new Set();
+    biodataDocs.forEach(bio => {
+        if (Array.isArray(bio.languages)) {
+            bio.languages.forEach(lang => {
+                if (lang && lang.$id) {
+                    uniqueLanguageIds.add(lang.$id);
+                }
+            });
+        }
+    });
+
+    const languagesMap = new Map();
+    if (uniqueLanguageIds.size > 0) {
+        const languagesRes = await appwrite.listDocuments(
+            APPWRITE_LANGUAGES_COLLECTION_ID,
+            [Query.equal('$id', Array.from(uniqueLanguageIds)), Query.limit(uniqueLanguageIds.size)]
+        );
+        languagesRes.documents.forEach(doc => languagesMap.set(doc.$id, doc));
+    }
+
 
     const hobbiesDocsRes = await appwrite.listDocuments(
         APPWRITE_HOBBIES_COLLECTION_ID,
@@ -176,7 +199,6 @@ const getNextBatchProfiles = async (userId, page = 0) => {
         )
             continue;
 
-        // Process hobbies: bio.hobbies is an array of relationship objects
         const userHobbyIds = Array.isArray(bio.hobbies)
             ? bio.hobbies.map((h) => (h ? h.$id : null)).filter(Boolean)
             : [];
@@ -184,18 +206,23 @@ const getNextBatchProfiles = async (userId, page = 0) => {
             ? preference.preferred_hobbies.map(h => h ? h.$id : null).filter(Boolean)
             : [];
 
-        // If preferred hobbies are specified, ensure there's at least one common hobby
         const hasCommonHobbies = userHobbyIds.some(hid => preferredHobbyIds.includes(hid));
         if (preferredHobbyIds.length > 0 && !hasCommonHobbies) continue;
 
-        // Construct the final profile object
+        // NEW: Map the language relationship IDs to the full language objects
+        const profileLanguages = Array.isArray(bio.languages)
+            ? bio.languages.map(lang => (lang ? languagesMap.get(lang.$id) : null)).filter(Boolean)
+            : [];
+
+        // --- UNIFIED PROFILE OBJECT CONSTRUCTION ---
         const profile = {
             userId: currentProfileUserId,
             biodata: bio,
             location: allOtherLocationsRes.documents.find(loc => loc.user && loc.user.$id === currentProfileUserId) || null,
-            images: imagesMap.get(currentProfileUserId) || [], // Now returns an array of image URLs
+            images: imagesMap.get(currentProfileUserId) || [], // All 6 images are now in this array
             hobbies: userHobbyIds.map((hid) => hobbiesMap.get(hid)).filter(Boolean),
-            prompts: promptsMap.get(currentProfileUserId) || [null, null, null, null, null, null, null] // NEW: Add prompts, with null defaults
+            languages: profileLanguages,
+            prompts: promptsMap.get(currentProfileUserId) || [null, null, null, null, null, null, null]
         };
 
         filteredProfiles.push(profile);
@@ -223,6 +250,7 @@ const getNextBatchProfiles = async (userId, page = 0) => {
 
     return filteredProfiles;
 };
+
 
 /**
  * Fetches a batch of random user profiles. It includes comprehensive profile data
@@ -372,6 +400,7 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
         .map((bio) => bio.user.$id)
         .filter(Boolean);
 
+
     // --- NEW: Fetch all prompts for the selected profiles ---
     const promptsDocsRes = await appwrite.listDocuments(
         APPWRITE_PROMPTS_COLLECTION_ID,
@@ -388,7 +417,7 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
         }
     });
 
-    // --- EXISTING IMAGE FETCHING LOGIC, MODIFIED TO RETURN ALL 6 IMAGES ---
+    // --- FETCH ALL 6 IMAGES ---
     const locationDocsRes = await appwrite.listDocuments(
         APPWRITE_LOCATION_COLLECTION_ID,
         [Query.equal("user", selectedUserIds), Query.limit(limit)]
@@ -415,9 +444,31 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
         }
     });
 
+    // --- NEW: Fetch all languages for mapping ---
+    const uniqueLanguageIds = new Set();
+    selectedBiodataDocs.forEach(bio => {
+        if (Array.isArray(bio.languages)) {
+            bio.languages.forEach(lang => {
+                if (lang && lang.$id) {
+                    uniqueLanguageIds.add(lang.$id);
+                }
+            });
+        }
+    });
+
+    const languagesMap = new Map();
+    if (uniqueLanguageIds.size > 0) {
+        const languagesRes = await appwrite.listDocuments(
+            APPWRITE_LANGUAGES_COLLECTION_ID,
+            [Query.equal('$id', Array.from(uniqueLanguageIds)), Query.limit(uniqueLanguageIds.size)]
+        );
+        languagesRes.documents.forEach(doc => languagesMap.set(doc.$id, doc));
+    }
+
+
     const hobbiesDocsRes = await appwrite.listDocuments(
         APPWRITE_HOBBIES_COLLECTION_ID,
-        [Query.limit(100)]
+        [Query.equal("$id", selectedBiodataDocs.flatMap(bio => (Array.isArray(bio.hobbies) ? bio.hobbies.map(h => h.$id) : []))), Query.limit(1000)]
     );
     const hobbiesMap = new Map();
     hobbiesDocsRes.documents.forEach((hobby) => {
@@ -435,14 +486,22 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
             ? bio.hobbies.map((h) => (h ? h.$id : null)).filter(Boolean)
             : [];
 
-        profiles.push({
+        const profileLanguages = Array.isArray(bio.languages)
+            ? bio.languages.map(lang => (lang ? languagesMap.get(lang.$id) : null)).filter(Boolean)
+            : [];
+
+        // --- UNIFIED PROFILE OBJECT CONSTRUCTION ---
+        const profile = {
             userId: profileUserId,
             biodata: bio,
             location: location,
-            images: userImages,
+            images: userImages, // All 6 images are now in this array
             hobbies: userHobbyIds.map((hid) => hobbiesMap.get(hid)).filter(Boolean),
-            prompts: promptsMap.get(profileUserId) || [null, null, null, null, null, null, null] // NEW: Add prompts, with null defaults
-        });
+            languages: profileLanguages,
+            prompts: promptsMap.get(profileUserId) || [null, null, null, null, null, null, null]
+        };
+
+        profiles.push(profile);
     }
 
     // 8. Update has-shown for the profiles actually returned
