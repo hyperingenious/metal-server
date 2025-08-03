@@ -400,7 +400,6 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
         .map((bio) => bio.user.$id)
         .filter(Boolean);
 
-
     // --- NEW: Fetch all prompts for the selected profiles ---
     const promptsDocsRes = await appwrite.listDocuments(
         APPWRITE_PROMPTS_COLLECTION_ID,
@@ -465,15 +464,35 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
         languagesRes.documents.forEach(doc => languagesMap.set(doc.$id, doc));
     }
 
-
-    const hobbiesDocsRes = await appwrite.listDocuments(
-        APPWRITE_HOBBIES_COLLECTION_ID,
-        [Query.equal("$id", selectedBiodataDocs.flatMap(bio => (Array.isArray(bio.hobbies) ? bio.hobbies.map(h => h.$id) : []))), Query.limit(1000)]
-    );
-    const hobbiesMap = new Map();
-    hobbiesDocsRes.documents.forEach((hobby) => {
-        hobbiesMap.set(hobby.$id, hobby);
+    // --- Bulletproof hobbies array handling ---
+    // Gather all unique hobby IDs from all selected biodata docs
+    const allHobbyIds = [];
+    selectedBiodataDocs.forEach(bio => {
+        if (Array.isArray(bio.hobbies) && bio.hobbies.length > 0) {
+            for (const h of bio.hobbies) {
+                if (h && h.$id) {
+                    allHobbyIds.push(h.$id);
+                }
+            }
+        }
     });
+
+    let hobbiesDocsRes = { documents: [] };
+    if (allHobbyIds.length > 0) {
+        hobbiesDocsRes = await appwrite.listDocuments(
+            APPWRITE_HOBBIES_COLLECTION_ID,
+            [Query.equal("$id", allHobbyIds), Query.limit(1000)]
+        );
+    }
+
+    const hobbiesMap = new Map();
+    if (Array.isArray(hobbiesDocsRes.documents)) {
+        hobbiesDocsRes.documents.forEach((hobby) => {
+            if (hobby && hobby.$id) {
+                hobbiesMap.set(hobby.$id, hobby);
+            }
+        });
+    }
 
     // 7. Construct the final profiles in the desired format
     const profiles = [];
@@ -482,9 +501,13 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
         const location = locationsMap.get(profileUserId) || null;
         const userImages = imagesMap.get(profileUserId) || [];
 
-        const userHobbyIds = Array.isArray(bio.hobbies)
-            ? bio.hobbies.map((h) => (h ? h.$id : null)).filter(Boolean)
-            : [];
+        // Bulletproof: always produce an array, even if hobbies is missing or not an array
+        let userHobbyIds = [];
+        if (Array.isArray(bio.hobbies) && bio.hobbies.length > 0) {
+            userHobbyIds = bio.hobbies
+                .map((h) => (h && h.$id ? h.$id : null))
+                .filter(Boolean);
+        }
 
         const profileLanguages = Array.isArray(bio.languages)
             ? bio.languages.map(lang => (lang ? languagesMap.get(lang.$id) : null)).filter(Boolean)
@@ -496,7 +519,9 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
             biodata: bio,
             location: location,
             images: userImages, // All 6 images are now in this array
-            hobbies: userHobbyIds.map((hid) => hobbiesMap.get(hid)).filter(Boolean),
+            hobbies: Array.isArray(userHobbyIds) && userHobbyIds.length > 0
+                ? userHobbyIds.map((hid) => hobbiesMap.get(hid)).filter(Boolean)
+                : [],
             languages: profileLanguages,
             prompts: promptsMap.get(profileUserId) || [null, null, null, null, null, null, null]
         };
@@ -521,6 +546,7 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
         }
     }
 
+    console.log(profiles);
     return profiles;
 };
 
