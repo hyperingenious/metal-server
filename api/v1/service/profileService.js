@@ -264,17 +264,6 @@ const getNextBatchProfiles = async (userId, page = 0) => {
 const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
     const appwrite = new AppwriteService();
 
-    // 1. Get viewed user IDs from has-shown collection (still exclude seen profiles)
-    const viewedDocs = await appwrite.listDocuments(
-        APPWRITE_HAS_SHOWN_COLLECTION_ID,
-        [Query.equal("user", currentUserId)]
-    );
-    const viewedUserIds = new Set(
-        viewedDocs.documents
-            .map((doc) => (doc.who ? doc.who.$id : null))
-            .filter(Boolean)
-    );
-
     // 2. Fetch current user's biodata to get their gender
     const currentUserBiodataRes = await appwrite.listDocuments(
         APPWRITE_BIODATA_COLLECTION_ID,
@@ -297,7 +286,7 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
 
     let eligibleBiodataDocs = allBiodataDocsRes.documents.filter((bio) => {
         const userIdFromBiodata = bio.user ? bio.user.$id : null;
-        return userIdFromBiodata && !viewedUserIds.has(userIdFromBiodata);
+        return userIdFromBiodata;
     });
 
     if (eligibleBiodataDocs.length === 0) {
