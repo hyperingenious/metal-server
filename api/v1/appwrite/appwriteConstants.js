@@ -21,16 +21,17 @@ const APPWRITE_LOCATION_COLLECTION_ID = process.env.APPWRITE_LOCATION_COLLECTION
 const APPWRITE_IMAGES_COLLECTION_ID = process.env.APPWRITE_IMAGES_COLLECTION_ID;
 const APPWRITE_CONNECTIONS_COLLECTION_ID = process.env.APPWRITE_CONNECTIONS_COLLECTION_ID;
 const APPWRITE_USERS_COLLECTION_ID = process.env.APPWRITE_USERS_COLLECTION_ID;
-const APPWRITE_MESSAGES_INBOX_COLLECTION_ID = process.env.APPWRITE_MESSAGES_INBOX_COLLECTION_ID;
 const APPWRITE_COMPLETION_STATUS_COLLECTION_ID = process.env.APPWRITE_COMPLETION_STATUS_COLLECTION_ID;
+const APPWRITE_MESSAGES_INBOX_COLLECTION_ID = process.env.APPWRITE_MESSAGES_INBOX_COLLECTION_ID;
 const APPWRITE_PROMPTS_COLLECTION_ID = process.env.APPWRITE_PROMPTS_COLLECTION_ID;
 const APPWRITE_LANGUAGES_COLLECTION_ID = process.env.APPWRITE_LANGUAGES_COLLECTION_ID;
 const APPWRITE_SETTINGS_COLLECTION_ID = process.env.APPWRITE_SETTINGS_COLLECTION_ID;
+const FCM_PROVIDER_ID = process.env.APPWRITE_FCM_PROVIDER_ID;
 
 // Ensure all required environment variables are set
 if (!APPWRITE_CLOUD_URL || !APPWRITE_PROJECT_ID || !APPWRITE_API_KEY || !DATABASE_ID) {
     console.error("Error: Missing one or more required Appwrite environment variables. Please check .env file.");
-    process.exit(1); // Exit the process if critical variables are missing
+    process.exit(1);
 }
 
 // Initializing the Appwrite client
@@ -44,16 +45,12 @@ const databases = new sdk.Databases(client);
 const account = new sdk.Account(client);
 const messaging = new sdk.Messaging(client);
 
-const FCM_PROVIDER_ID = process.env.APPWRITE_FCM_PROVIDER_ID;
-
 module.exports = {
-    // Exporting the initialized services and query object
     databases,
     account,
     messaging,
-    query: sdk.Query, // sdk.Query is part of the SDK, not a service instance
+    query: sdk.Query,
 
-    // Exporting all constants for clarity and easy access
     DATABASE_ID,
     APPWRITE_REPORTS_COLLECTION_ID,
     APPWRITE_BLOCKED_COLLECTION_ID,
@@ -72,7 +69,7 @@ module.exports = {
     APPWRITE_PROMPTS_COLLECTION_ID,
     APPWRITE_LANGUAGES_COLLECTION_ID,
     APPWRITE_SETTINGS_COLLECTION_ID,
-    FCM_PROVIDER_ID,
+    FCM_PROVIDER_ID, 
     APPWRITE_CLOUD_URL,
     APPWRITE_PROJECT_ID,
     APPWRITE_API_KEY

@@ -1,13 +1,13 @@
 // api/v1/service/invitationService.js
 
 const { AppwriteService } = require('../appwrite/appwriteService');
-const { ID } = require('node-appwrite'); // Import ID for unique message IDs
+const { ID } = require('node-appwrite');
 const {
     APPWRITE_USERS_COLLECTION_ID,
     APPWRITE_CONNECTIONS_COLLECTION_ID,
     APPWRITE_HAS_SHOWN_COLLECTION_ID,
-    messaging, // **NEW: Import messaging service**
-    FCM_PROVIDER_ID, // **NEW: Import FCM Provider ID**
+    messaging,
+    FCM_PROVIDER_ID,
 } = require('../appwrite/appwriteConstants');
 const { MAX_ACTIVE_SENT_INVITATIONS, MAX_ACTIVE_RECEIVED_INVITATIONS } = require('../constants/invitationLimits');
 
@@ -17,6 +17,7 @@ const sendInvitation = async (senderUserId, receiverUserId) => {
     // Fetch Sender's Document
     const sender = await appwrite.getDocumentByRelation(APPWRITE_USERS_COLLECTION_ID, '$id', senderUserId);
     if (!sender) throw new Error('Sender not found');
+
     if ((sender.activeSentInvitationCount || 0) >= MAX_ACTIVE_SENT_INVITATIONS) {
         const error = new Error('Max active sent invitations reached');
         error.code = 403;
@@ -57,34 +58,38 @@ const sendInvitation = async (senderUserId, receiverUserId) => {
 
         // --- PUSH NOTIFICATION TRIGGER START: Invitation Received ---
         try {
-            // Fetch sender's name for the notification message
             const senderUserDoc = await appwrite.getDocument(APPWRITE_USERS_COLLECTION_ID, senderUserId);
             const senderName = senderUserDoc?.name || 'Someone';
 
-            // Send push notification to the receiver
-            // Appwrite Messaging targets can be user IDs or topics.
-            // A common pattern for user-specific notifications is to subscribe devices
-            // to a topic named after the user's ID (e.g., `users_${receiverUserId}`).
-            // Ensure your Flutter frontend registers device tokens to such a topic or directly to the user.
             await messaging.createPush(
-                ID.unique(), // Unique message ID
-                `users_${receiverUserId}`, // Target ID (e.g., a topic for the user)
-                'New Invitation!', // Subject (title of the notification)
-                `${senderName} has sent you an invitation!`, // Body (content of the notification)
-                {
-                    data: { // Custom data payload for your app
-                        type: 'new_invitation',
-                        senderId: senderUserId,
-                        senderName: senderName
-                    }
+                ID.unique(),                          // messageId (valid format)
+                'New Invitation!',                    // title (string, 1–256 chars)
+                `${senderName} has sent you an invitation!`, // body
+                [`users_${receiverUserId}`],           // topics
+                [],                                    // users (none in this case)
+                [],                                    // targets (none in this case)
+                {                                      // data payload
+                    type: 'new_invitation',
+                    senderId: senderUserId,
+                    senderName: senderName
                 },
-                [FCM_PROVIDER_ID] // Specify your configured FCM provider ID
+                undefined, // action
+                undefined, // image
+                undefined, // icon
+                undefined, // sound
+                undefined, // color
+                undefined, // tag
+                undefined, // badge
+                false,     // draft
+                undefined, // scheduledAt
+                false,     // contentAvailable
+                false,     // critical
+                'normal'   // priority
             );
+
             console.log(`Push notification sent to ${receiverUserId} for new invitation.`);
         } catch (pushError) {
             console.error(`Failed to send push notification to ${receiverUserId} for invitation:`, pushError.message);
-            // Don't throw this error, as it shouldn't block the core invitation logic.
-            // Push notifications are often "fire and forget" from the main logic's perspective.
         }
         // --- PUSH NOTIFICATION TRIGGER END ---
     }
