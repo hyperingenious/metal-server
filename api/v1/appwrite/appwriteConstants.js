@@ -25,6 +25,7 @@ const APPWRITE_MESSAGES_INBOX_COLLECTION_ID = process.env.APPWRITE_MESSAGES_INBO
 const APPWRITE_COMPLETION_STATUS_COLLECTION_ID = process.env.APPWRITE_COMPLETION_STATUS_COLLECTION_ID;
 const APPWRITE_PROMPTS_COLLECTION_ID = process.env.APPWRITE_PROMPTS_COLLECTION_ID;
 const APPWRITE_LANGUAGES_COLLECTION_ID = process.env.APPWRITE_LANGUAGES_COLLECTION_ID;
+const APPWRITE_SETTINGS_COLLECTION_ID = process.env.APPWRITE_SETTINGS_COLLECTION_ID;
 
 // Ensure all required environment variables are set
 if (!APPWRITE_CLOUD_URL || !APPWRITE_PROJECT_ID || !APPWRITE_API_KEY || !DATABASE_ID) {
@@ -41,11 +42,15 @@ const client = new sdk.Client()
 // Initialize Appwrite services
 const databases = new sdk.Databases(client);
 const account = new sdk.Account(client);
+const messaging = new sdk.Messaging(client);
+
+const FCM_PROVIDER_ID = process.env.APPWRITE_FCM_PROVIDER_ID;
 
 module.exports = {
     // Exporting the initialized services and query object
     databases,
     account,
+    messaging,
     query: sdk.Query, // sdk.Query is part of the SDK, not a service instance
 
     // Exporting all constants for clarity and easy access
@@ -66,6 +71,8 @@ module.exports = {
     APPWRITE_COMPLETION_STATUS_COLLECTION_ID,
     APPWRITE_PROMPTS_COLLECTION_ID,
     APPWRITE_LANGUAGES_COLLECTION_ID,
+    APPWRITE_SETTINGS_COLLECTION_ID,
+    FCM_PROVIDER_ID,
     APPWRITE_CLOUD_URL,
     APPWRITE_PROJECT_ID,
     APPWRITE_API_KEY

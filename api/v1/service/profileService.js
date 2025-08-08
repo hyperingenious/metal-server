@@ -13,7 +13,8 @@ const {
     APPWRITE_CONNECTIONS_COLLECTION_ID,
     APPWRITE_COMPLETION_STATUS_COLLECTION_ID,
     APPWRITE_PROMPTS_COLLECTION_ID,
-    APPWRITE_LANGUAGES_COLLECTION_ID
+    APPWRITE_LANGUAGES_COLLECTION_ID,
+    APPWRITE_SETTINGS_COLLECTION_ID // NEW IMPORT
 } = require('../appwrite/appwriteConstants');
 
 
@@ -99,11 +100,34 @@ const getNextBatchProfiles = async (userId, page = 0) => {
 
     if (!nearbyAndUnseenUserIds.length) return [];
 
-    // Fetch biodata records only for the nearby, unseen users
+
+    // --- NEW: Fetch settings for all candidate users for filtering and masking ---
+    const settingsRes = await appwrite.listDocuments(
+        APPWRITE_SETTINGS_COLLECTION_ID,
+        [Query.equal('user', nearbyAndUnseenUserIds), Query.limit(nearbyAndUnseenUserIds.length)]
+    );
+    const settingsMap = new Map();
+    settingsRes.documents.forEach(doc => {
+        if (doc.user) {
+            settingsMap.set(doc.user.$id, doc);
+        }
+    });
+
+    // --- NEW: Filter out users who are in incognito mode ---
+    const nonIncognitoUserIds = nearbyAndUnseenUserIds.filter(id => {
+        const settings = settingsMap.get(id);
+        // If no settings doc exists or isIncognito is false, keep the profile
+        return !settings || !settings.isIncognito;
+    });
+
+    if (!nonIncognitoUserIds.length) return [];
+
+
+    // Fetch biodata records only for the non-incognito, nearby, unseen users
     const biodataDocsRes = await appwrite.listDocuments(
         APPWRITE_BIODATA_COLLECTION_ID,
         [
-            Query.equal("user", nearbyAndUnseenUserIds),
+            Query.equal("user", nonIncognitoUserIds),
             Query.offset(offset),
             Query.limit(PAGE_SIZE * 2),
         ]
@@ -116,7 +140,7 @@ const getNextBatchProfiles = async (userId, page = 0) => {
 
     if (allUserIdsInBiodata.length === 0) return [];
 
-    // --- NEW: Fetch all prompts for the profiles in this batch ---
+
     const promptsDocsRes = await appwrite.listDocuments(
         APPWRITE_PROMPTS_COLLECTION_ID,
         [Query.equal('user', allUserIdsInBiodata), Query.limit(allUserIdsInBiodata.length)]
@@ -132,7 +156,6 @@ const getNextBatchProfiles = async (userId, page = 0) => {
         }
     });
 
-    // --- FETCH ALL 6 IMAGES ---
     const imageDocsRes = await appwrite.listDocuments(
         APPWRITE_IMAGES_COLLECTION_ID,
         [Query.equal("user", allUserIdsInBiodata), Query.limit(PAGE_SIZE * 2)]
@@ -150,7 +173,6 @@ const getNextBatchProfiles = async (userId, page = 0) => {
         }
     });
 
-    // --- NEW: Fetch all languages for mapping ---
     const uniqueLanguageIds = new Set();
     biodataDocs.forEach(bio => {
         if (Array.isArray(bio.languages)) {
@@ -209,17 +231,23 @@ const getNextBatchProfiles = async (userId, page = 0) => {
         const hasCommonHobbies = userHobbyIds.some(hid => preferredHobbyIds.includes(hid));
         if (preferredHobbyIds.length > 0 && !hasCommonHobbies) continue;
 
-        // NEW: Map the language relationship IDs to the full language objects
         const profileLanguages = Array.isArray(bio.languages)
             ? bio.languages.map(lang => (lang ? languagesMap.get(lang.$id) : null)).filter(Boolean)
             : [];
 
+        // --- NEW: Apply isHideName check ---
+        let profileName = bio.name; // Assuming name exists in biodata as per the logic above
+        const profileSettings = settingsMap.get(currentProfileUserId);
+        if (profileSettings && profileSettings.isHideName) {
+            profileName = profileName ? `${profileName[0]}.` : '';
+        }
+        
         // --- UNIFIED PROFILE OBJECT CONSTRUCTION ---
         const profile = {
             userId: currentProfileUserId,
-            biodata: bio,
+            biodata: { ...bio, name: profileName }, // Overwrite the name with the masked version if needed
             location: allOtherLocationsRes.documents.find(loc => loc.user && loc.user.$id === currentProfileUserId) || null,
-            images: imagesMap.get(currentProfileUserId) || [], // All 6 images are now in this array
+            images: imagesMap.get(currentProfileUserId) || [],
             hobbies: userHobbyIds.map((hid) => hobbiesMap.get(hid)).filter(Boolean),
             languages: profileLanguages,
             prompts: promptsMap.get(currentProfileUserId) || [null, null, null, null, null, null, null]
@@ -264,6 +292,17 @@ const getNextBatchProfiles = async (userId, page = 0) => {
 const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
     const appwrite = new AppwriteService();
 
+    // 1. Get viewed user IDs from has-shown collection (still exclude seen profiles)
+    const viewedDocs = await appwrite.listDocuments(
+        APPWRITE_HAS_SHOWN_COLLECTION_ID,
+        [Query.equal("user", currentUserId)]
+    );
+    const viewedUserIds = new Set(
+        viewedDocs.documents
+            .map((doc) => (doc.who ? doc.who.$id : null))
+            .filter(Boolean)
+    );
+
     // 2. Fetch current user's biodata to get their gender
     const currentUserBiodataRes = await appwrite.listDocuments(
         APPWRITE_BIODATA_COLLECTION_ID,
@@ -286,7 +325,7 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
 
     let eligibleBiodataDocs = allBiodataDocsRes.documents.filter((bio) => {
         const userIdFromBiodata = bio.user ? bio.user.$id : null;
-        return userIdFromBiodata;
+        return userIdFromBiodata && !viewedUserIds.has(userIdFromBiodata);
     });
 
     if (eligibleBiodataDocs.length === 0) {
@@ -369,7 +408,32 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
         return [];
     }
 
-    // 4. Shuffle the eligible biodata documents for randomization (Fisher-Yates)
+    // --- NEW: Fetch settings for all candidate users for filtering and masking ---
+    const candidateUserIdsForSettings = eligibleBiodataDocs.map(bio => bio.user.$id).filter(Boolean);
+    const settingsRes = await appwrite.listDocuments(
+        APPWRITE_SETTINGS_COLLECTION_ID,
+        [Query.equal('user', candidateUserIdsForSettings), Query.limit(candidateUserIdsForSettings.length)]
+    );
+    const settingsMap = new Map();
+    settingsRes.documents.forEach(doc => {
+        if (doc.user) {
+            settingsMap.set(doc.user.$id, doc);
+        }
+    });
+
+    // --- NEW: Filter out incognito users from the final list of eligible profiles ---
+    eligibleBiodataDocs = eligibleBiodataDocs.filter(bio => {
+        const userIdFromBiodata = bio.user ? bio.user.$id : null;
+        const settings = settingsMap.get(userIdFromBiodata);
+        // If no settings doc or isIncognito is false, keep the profile
+        return !settings || !settings.isIncognito;
+    });
+
+    if (eligibleBiodataDocs.length === 0) {
+        return [];
+    }
+
+    // 4. Shuffle the remaining eligible biodata documents for randomization
     for (let i = eligibleBiodataDocs.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [eligibleBiodataDocs[i], eligibleBiodataDocs[j]] = [
@@ -453,35 +517,15 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
         languagesRes.documents.forEach(doc => languagesMap.set(doc.$id, doc));
     }
 
-    // --- Bulletproof hobbies array handling ---
-    // Gather all unique hobby IDs from all selected biodata docs
-    const allHobbyIds = [];
-    selectedBiodataDocs.forEach(bio => {
-        if (Array.isArray(bio.hobbies) && bio.hobbies.length > 0) {
-            for (const h of bio.hobbies) {
-                if (h && h.$id) {
-                    allHobbyIds.push(h.$id);
-                }
-            }
-        }
-    });
 
-    let hobbiesDocsRes = { documents: [] };
-    if (allHobbyIds.length > 0) {
-        hobbiesDocsRes = await appwrite.listDocuments(
-            APPWRITE_HOBBIES_COLLECTION_ID,
-            [Query.equal("$id", allHobbyIds), Query.limit(1000)]
-        );
-    }
-
+    const hobbiesDocsRes = await appwrite.listDocuments(
+        APPWRITE_HOBBIES_COLLECTION_ID,
+        [Query.equal("$id", selectedBiodataDocs.flatMap(bio => (Array.isArray(bio.hobbies) ? bio.hobbies.map(h => h.$id) : []))), Query.limit(1000)]
+    );
     const hobbiesMap = new Map();
-    if (Array.isArray(hobbiesDocsRes.documents)) {
-        hobbiesDocsRes.documents.forEach((hobby) => {
-            if (hobby && hobby.$id) {
-                hobbiesMap.set(hobby.$id, hobby);
-            }
-        });
-    }
+    hobbiesDocsRes.documents.forEach((hobby) => {
+        hobbiesMap.set(hobby.$id, hobby);
+    });
 
     // 7. Construct the final profiles in the desired format
     const profiles = [];
@@ -490,27 +534,27 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
         const location = locationsMap.get(profileUserId) || null;
         const userImages = imagesMap.get(profileUserId) || [];
 
-        // Bulletproof: always produce an array, even if hobbies is missing or not an array
-        let userHobbyIds = [];
-        if (Array.isArray(bio.hobbies) && bio.hobbies.length > 0) {
-            userHobbyIds = bio.hobbies
-                .map((h) => (h && h.$id ? h.$id : null))
-                .filter(Boolean);
-        }
+        const userHobbyIds = Array.isArray(bio.hobbies)
+            ? bio.hobbies.map((h) => (h ? h.$id : null)).filter(Boolean)
+            : [];
 
         const profileLanguages = Array.isArray(bio.languages)
             ? bio.languages.map(lang => (lang ? languagesMap.get(lang.$id) : null)).filter(Boolean)
             : [];
 
-        // --- UNIFIED PROFILE OBJECT CONSTRUCTION ---
+        // --- NEW: Apply isHideName check ---
+        let profileName = bio.name;
+        const profileSettings = settingsMap.get(profileUserId);
+        if (profileSettings && profileSettings.isHideName) {
+            profileName = profileName ? `${profileName[0]}.` : '';
+        }
+
         const profile = {
             userId: profileUserId,
-            biodata: bio,
+            biodata: { ...bio, name: profileName },
             location: location,
-            images: userImages, // All 6 images are now in this array
-            hobbies: Array.isArray(userHobbyIds) && userHobbyIds.length > 0
-                ? userHobbyIds.map((hid) => hobbiesMap.get(hid)).filter(Boolean)
-                : [],
+            images: userImages,
+            hobbies: userHobbyIds.map((hid) => hobbiesMap.get(hid)).filter(Boolean),
             languages: profileLanguages,
             prompts: promptsMap.get(profileUserId) || [null, null, null, null, null, null, null]
         };
