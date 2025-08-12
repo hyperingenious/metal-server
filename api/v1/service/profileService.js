@@ -529,11 +529,12 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
         languagesRes.documents.forEach(doc => languagesMap.set(doc.$id, doc));
     }
 
-
+console.log(selectedBiodataDocs.flatMap(bio => (Array.isArray(bio.hobbies) ? bio.hobbies.map(h => h.$id) : [])));
     const hobbiesDocsRes = await appwrite.listDocuments(
         APPWRITE_HOBBIES_COLLECTION_ID,
         [Query.equal("$id", selectedBiodataDocs.flatMap(bio => (Array.isArray(bio.hobbies) ? bio.hobbies.map(h => h.$id) : []))), Query.limit(1000)]
     );
+
     const hobbiesMap = new Map();
     hobbiesDocsRes.documents.forEach((hobby) => {
         hobbiesMap.set(hobby.$id, hobby);
@@ -577,7 +578,6 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
 
     // 8. Update has-shown for the profiles actually returned
     for (const profile of profiles) {
-        console.log(profile);
         const existingHasShownRes = await appwrite.listDocuments(
             APPWRITE_HAS_SHOWN_COLLECTION_ID,
             [Query.equal("user", currentUserId), Query.equal("who", profile.userId)]
