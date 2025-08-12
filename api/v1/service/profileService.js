@@ -14,7 +14,7 @@ const {
     APPWRITE_COMPLETION_STATUS_COLLECTION_ID,
     APPWRITE_PROMPTS_COLLECTION_ID,
     APPWRITE_LANGUAGES_COLLECTION_ID,
-    APPWRITE_SETTINGS_COLLECTION_ID // NEW IMPORT
+    APPWRITE_SETTINGS_COLLECTION_ID
 } = require('../appwrite/appwriteConstants');
 
 
@@ -101,11 +101,15 @@ const getNextBatchProfiles = async (userId, page = 0) => {
     if (!nearbyAndUnseenUserIds.length) return [];
 
 
-    // --- NEW: Fetch settings for all candidate users for filtering and masking ---
-    const settingsRes = await appwrite.listDocuments(
-        APPWRITE_SETTINGS_COLLECTION_ID,
-        [Query.equal('user', nearbyAndUnseenUserIds), Query.limit(nearbyAndUnseenUserIds.length)]
-    );
+    // --- CORRECTED: Add check to prevent DB call with empty array ---
+    const candidateUserIdsForSettings = nearbyAndUnseenUserIds.map(id => id).filter(Boolean);
+    let settingsRes = { documents: [] };
+    if (candidateUserIdsForSettings.length > 0) {
+        settingsRes = await appwrite.listDocuments(
+            APPWRITE_SETTINGS_COLLECTION_ID,
+            [Query.equal('user', candidateUserIdsForSettings), Query.limit(candidateUserIdsForSettings.length)]
+        );
+    }
     const settingsMap = new Map();
     settingsRes.documents.forEach(doc => {
         if (doc.user) {
@@ -113,10 +117,9 @@ const getNextBatchProfiles = async (userId, page = 0) => {
         }
     });
 
-    // --- NEW: Filter out users who are in incognito mode ---
+    // --- CORRECTED: Filter out users who are in incognito mode ---
     const nonIncognitoUserIds = nearbyAndUnseenUserIds.filter(id => {
         const settings = settingsMap.get(id);
-        // If no settings doc exists or isIncognito is false, keep the profile
         return !settings || !settings.isIncognito;
     });
 
@@ -236,21 +239,21 @@ const getNextBatchProfiles = async (userId, page = 0) => {
             : [];
 
         // --- NEW: Apply isHideName check ---
-        let profileName = bio.name; // Assuming name exists in biodata as per the logic above
+        let profileName = bio.name;
         const profileSettings = settingsMap.get(currentProfileUserId);
         if (profileSettings && profileSettings.isHideName) {
             profileName = profileName ? `${profileName[0]}.` : '';
         }
-        
-        // --- UNIFIED PROFILE OBJECT CONSTRUCTION ---
+
         const profile = {
             userId: currentProfileUserId,
-            biodata: { ...bio, name: profileName }, // Overwrite the name with the masked version if needed
+            biodata: { ...bio, name: profileName },
             location: allOtherLocationsRes.documents.find(loc => loc.user && loc.user.$id === currentProfileUserId) || null,
             images: imagesMap.get(currentProfileUserId) || [],
             hobbies: userHobbyIds.map((hid) => hobbiesMap.get(hid)).filter(Boolean),
             languages: profileLanguages,
-            prompts: promptsMap.get(currentProfileUserId) || [null, null, null, null, null, null, null]
+            prompts: promptsMap.get(currentProfileUserId) || [null, null, null, null, null, null, null],
+            settings: profileSettings || { isIncognito: false, isHideName: false }
         };
 
         filteredProfiles.push(profile);
@@ -342,26 +345,32 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
     }
 
     let connectedUserIds = new Set();
-    const connectionsAsSenderRes = await appwrite.listDocuments(
-        APPWRITE_CONNECTIONS_COLLECTION_ID, [
-        Query.equal("senderId", currentUserId),
-        Query.equal("receiverId", candidateUserIds),
-        Query.limit(5000),
-    ]);
+    let connectionsAsSenderRes = { documents: [] };
+    if (candidateUserIds.length > 0) {
+        connectionsAsSenderRes = await appwrite.listDocuments(
+            APPWRITE_CONNECTIONS_COLLECTION_ID, [
+            Query.equal("senderId", currentUserId),
+            Query.equal("receiverId", candidateUserIds),
+            Query.limit(5000),
+        ]);
+    }
     connectionsAsSenderRes.documents.forEach((conn) => {
         if (conn.receiverId && conn.receiverId.$id) {
             connectedUserIds.add(conn.receiverId.$id);
         }
     });
 
-    const connectionsAsReceiverRes = await appwrite.listDocuments(
-        APPWRITE_CONNECTIONS_COLLECTION_ID,
-        [
-            Query.equal("receiverId", currentUserId),
-            Query.equal("senderId", candidateUserIds),
-            Query.limit(5000),
-        ]
-    );
+    let connectionsAsReceiverRes = { documents: [] };
+    if (candidateUserIds.length > 0) {
+        connectionsAsReceiverRes = await appwrite.listDocuments(
+            APPWRITE_CONNECTIONS_COLLECTION_ID,
+            [
+                Query.equal("receiverId", currentUserId),
+                Query.equal("senderId", candidateUserIds),
+                Query.limit(5000),
+            ]
+        );
+    }
     connectionsAsReceiverRes.documents.forEach((conn) => {
         if (conn.senderId && conn.senderId.$id) {
             connectedUserIds.add(conn.senderId.$id);
@@ -383,8 +392,9 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
         .filter(Boolean);
 
     let completedUserIds = new Set();
+    let completionStatusRes = { documents: [] };
     if (eligibleUserIds.length > 0) {
-        const completionStatusRes = await appwrite.listDocuments(
+        completionStatusRes = await appwrite.listDocuments(
             APPWRITE_COMPLETION_STATUS_COLLECTION_ID,
             [
                 Query.equal("user", eligibleUserIds),
@@ -392,12 +402,12 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
                 Query.limit(5000),
             ]
         );
-        completionStatusRes.documents.forEach((doc) => {
-            if (doc.user && doc.user.$id) {
-                completedUserIds.add(doc.user.$id);
-            }
-        });
     }
+    completionStatusRes.documents.forEach((doc) => {
+        if (doc.user && doc.user.$id) {
+            completedUserIds.add(doc.user.$id);
+        }
+    });
 
     eligibleBiodataDocs = eligibleBiodataDocs.filter((bio) => {
         const userIdFromBiodata = bio.user ? bio.user.$id : null;
@@ -410,10 +420,13 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
 
     // --- NEW: Fetch settings for all candidate users for filtering and masking ---
     const candidateUserIdsForSettings = eligibleBiodataDocs.map(bio => bio.user.$id).filter(Boolean);
-    const settingsRes = await appwrite.listDocuments(
-        APPWRITE_SETTINGS_COLLECTION_ID,
-        [Query.equal('user', candidateUserIdsForSettings), Query.limit(candidateUserIdsForSettings.length)]
-    );
+    let settingsRes = { documents: [] };
+    if (candidateUserIdsForSettings.length > 0) {
+        settingsRes = await appwrite.listDocuments(
+            APPWRITE_SETTINGS_COLLECTION_ID,
+            [Query.equal('user', candidateUserIdsForSettings), Query.limit(candidateUserIdsForSettings.length)]
+        );
+    }
     const settingsMap = new Map();
     settingsRes.documents.forEach(doc => {
         if (doc.user) {
@@ -425,7 +438,6 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
     eligibleBiodataDocs = eligibleBiodataDocs.filter(bio => {
         const userIdFromBiodata = bio.user ? bio.user.$id : null;
         const settings = settingsMap.get(userIdFromBiodata);
-        // If no settings doc or isIncognito is false, keep the profile
         return !settings || !settings.isIncognito;
     });
 
@@ -556,7 +568,8 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
             images: userImages,
             hobbies: userHobbyIds.map((hid) => hobbiesMap.get(hid)).filter(Boolean),
             languages: profileLanguages,
-            prompts: promptsMap.get(profileUserId) || [null, null, null, null, null, null, null]
+            prompts: promptsMap.get(profileUserId) || [null, null, null, null, null, null, null],
+            settings: profileSettings || { isIncognito: false, isHideName: false }
         };
 
         profiles.push(profile);
@@ -587,3 +600,5 @@ module.exports = {
     getNextBatchProfiles,
     getRandomProfilesSimple,
 };
+
+
