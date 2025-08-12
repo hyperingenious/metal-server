@@ -21,10 +21,15 @@ const APPWRITE_LOCATION_COLLECTION_ID = process.env.APPWRITE_LOCATION_COLLECTION
 const APPWRITE_IMAGES_COLLECTION_ID = process.env.APPWRITE_IMAGES_COLLECTION_ID;
 const APPWRITE_CONNECTIONS_COLLECTION_ID = process.env.APPWRITE_CONNECTIONS_COLLECTION_ID;
 const APPWRITE_USERS_COLLECTION_ID = process.env.APPWRITE_USERS_COLLECTION_ID;
-const APPWRITE_MESSAGES_INBOX_COLLECTION_ID = process.env.APPWRITE_MESSAGES_INBOX_COLLECTION_ID;
+
+// **CORRECTED:** All constants must be declared here to be used in profileService.js
 const APPWRITE_COMPLETION_STATUS_COLLECTION_ID = process.env.APPWRITE_COMPLETION_STATUS_COLLECTION_ID;
 const APPWRITE_PROMPTS_COLLECTION_ID = process.env.APPWRITE_PROMPTS_COLLECTION_ID;
 const APPWRITE_LANGUAGES_COLLECTION_ID = process.env.APPWRITE_LANGUAGES_COLLECTION_ID;
+const APPWRITE_SETTINGS_COLLECTION_ID = process.env.APPWRITE_SETTINGS_COLLECTION_ID;
+const APPWRITE_MESSAGES_INBOX_COLLECTION_ID = process.env.APPWRITE_MESSAGES_INBOX_COLLECTION_ID;
+const FCM_PROVIDER_ID = process.env.APPWRITE_FCM_PROVIDER_ID;
+
 
 // Ensure all required environment variables are set
 if (!APPWRITE_CLOUD_URL || !APPWRITE_PROJECT_ID || !APPWRITE_API_KEY || !DATABASE_ID) {
@@ -41,12 +46,16 @@ const client = new sdk.Client()
 // Initialize Appwrite services
 const databases = new sdk.Databases(client);
 const account = new sdk.Account(client);
+const messaging = new sdk.Messaging(client); // Ensure this is present
+const functions = new sdk.Functions(client); // If you'll be using functions
 
 module.exports = {
     // Exporting the initialized services and query object
     databases,
     account,
-    query: sdk.Query, // sdk.Query is part of the SDK, not a service instance
+    messaging,
+    functions,
+    query: sdk.Query,
 
     // Exporting all constants for clarity and easy access
     DATABASE_ID,
@@ -56,16 +65,20 @@ module.exports = {
     APPWRITE_PREFERENCE_COLLECTION_ID,
     APPWRITE_HAS_SHOWN_COLLECTION_ID,
     APPWRITE_MESSAGES_COLLECTION_ID,
-    APPWRITE_MESSAGES_INBOX_COLLECTION_ID,
     APPWRITE_NOTIFICATIONS_COLLECTION_ID,
     APPWRITE_BIODATA_COLLECTION_ID,
     APPWRITE_LOCATION_COLLECTION_ID,
     APPWRITE_IMAGES_COLLECTION_ID,
     APPWRITE_CONNECTIONS_COLLECTION_ID,
     APPWRITE_USERS_COLLECTION_ID,
+
     APPWRITE_COMPLETION_STATUS_COLLECTION_ID,
     APPWRITE_PROMPTS_COLLECTION_ID,
     APPWRITE_LANGUAGES_COLLECTION_ID,
+    APPWRITE_SETTINGS_COLLECTION_ID,
+    APPWRITE_MESSAGES_INBOX_COLLECTION_ID,
+    FCM_PROVIDER_ID,
+
     APPWRITE_CLOUD_URL,
     APPWRITE_PROJECT_ID,
     APPWRITE_API_KEY
