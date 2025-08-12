@@ -520,6 +520,7 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
 
     // 8. Update has-shown for the profiles actually returned
     for (const profile of profiles) {
+        console.log(profile);
         const existingHasShownRes = await appwrite.listDocuments(
             APPWRITE_HAS_SHOWN_COLLECTION_ID,
             [Query.equal("user", currentUserId), Query.equal("who", profile.userId)]
