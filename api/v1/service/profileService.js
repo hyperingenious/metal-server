@@ -529,12 +529,18 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
         languagesRes.documents.forEach(doc => languagesMap.set(doc.$id, doc));
     }
 
-console.log(selectedBiodataDocs.flatMap(bio => (Array.isArray(bio.hobbies) ? bio.hobbies.map(h => h.$id) : [])));
-    const hobbiesDocsRes = await appwrite.listDocuments(
-        APPWRITE_HOBBIES_COLLECTION_ID,
-        [Query.equal("$id", selectedBiodataDocs.flatMap(bio => (Array.isArray(bio.hobbies) ? bio.hobbies.map(h => h.$id) : []))), Query.limit(1000)]
+    // Collect all hobby IDs from selectedBiodataDocs
+    const allHobbyIds = selectedBiodataDocs.flatMap(bio =>
+        Array.isArray(bio.hobbies) ? bio.hobbies.map(h => h && h.$id).filter(Boolean) : []
     );
 
+    let hobbiesDocsRes = { documents: [] };
+    if (allHobbyIds.length > 0) {
+        hobbiesDocsRes = await appwrite.listDocuments(
+            APPWRITE_HOBBIES_COLLECTION_ID,
+            [Query.equal("$id", allHobbyIds), Query.limit(1000)]
+        );
+    }
     const hobbiesMap = new Map();
     hobbiesDocsRes.documents.forEach((hobby) => {
         hobbiesMap.set(hobby.$id, hobby);
