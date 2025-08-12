@@ -13,8 +13,7 @@ const {
     APPWRITE_CONNECTIONS_COLLECTION_ID,
     APPWRITE_COMPLETION_STATUS_COLLECTION_ID,
     APPWRITE_PROMPTS_COLLECTION_ID,
-    APPWRITE_LANGUAGES_COLLECTION_ID,
-    APPWRITE_SETTINGS_COLLECTION_ID
+    APPWRITE_LANGUAGES_COLLECTION_ID
 } = require('../appwrite/appwriteConstants');
 
 
@@ -100,37 +99,11 @@ const getNextBatchProfiles = async (userId, page = 0) => {
 
     if (!nearbyAndUnseenUserIds.length) return [];
 
-
-    // --- CORRECTED: Add check to prevent DB call with empty array ---
-    const candidateUserIdsForSettings = nearbyAndUnseenUserIds.map(id => id).filter(Boolean);
-    let settingsRes = { documents: [] };
-    if (candidateUserIdsForSettings.length > 0) {
-        settingsRes = await appwrite.listDocuments(
-            APPWRITE_SETTINGS_COLLECTION_ID,
-            [Query.equal('user', candidateUserIdsForSettings), Query.limit(candidateUserIdsForSettings.length)]
-        );
-    }
-    const settingsMap = new Map();
-    settingsRes.documents.forEach(doc => {
-        if (doc.user) {
-            settingsMap.set(doc.user.$id, doc);
-        }
-    });
-
-    // --- CORRECTED: Filter out users who are in incognito mode ---
-    const nonIncognitoUserIds = nearbyAndUnseenUserIds.filter(id => {
-        const settings = settingsMap.get(id);
-        return !settings || !settings.isIncognito;
-    });
-
-    if (!nonIncognitoUserIds.length) return [];
-
-
-    // Fetch biodata records only for the non-incognito, nearby, unseen users
+    // Fetch biodata records only for the nearby, unseen users
     const biodataDocsRes = await appwrite.listDocuments(
         APPWRITE_BIODATA_COLLECTION_ID,
         [
-            Query.equal("user", nonIncognitoUserIds),
+            Query.equal("user", nearbyAndUnseenUserIds),
             Query.offset(offset),
             Query.limit(PAGE_SIZE * 2),
         ]
@@ -143,7 +116,7 @@ const getNextBatchProfiles = async (userId, page = 0) => {
 
     if (allUserIdsInBiodata.length === 0) return [];
 
-
+    // --- NEW: Fetch all prompts for the profiles in this batch ---
     const promptsDocsRes = await appwrite.listDocuments(
         APPWRITE_PROMPTS_COLLECTION_ID,
         [Query.equal('user', allUserIdsInBiodata), Query.limit(allUserIdsInBiodata.length)]
@@ -159,6 +132,7 @@ const getNextBatchProfiles = async (userId, page = 0) => {
         }
     });
 
+    // --- FETCH ALL 6 IMAGES ---
     const imageDocsRes = await appwrite.listDocuments(
         APPWRITE_IMAGES_COLLECTION_ID,
         [Query.equal("user", allUserIdsInBiodata), Query.limit(PAGE_SIZE * 2)]
@@ -176,6 +150,7 @@ const getNextBatchProfiles = async (userId, page = 0) => {
         }
     });
 
+    // --- NEW: Fetch all languages for mapping ---
     const uniqueLanguageIds = new Set();
     biodataDocs.forEach(bio => {
         if (Array.isArray(bio.languages)) {
@@ -234,26 +209,20 @@ const getNextBatchProfiles = async (userId, page = 0) => {
         const hasCommonHobbies = userHobbyIds.some(hid => preferredHobbyIds.includes(hid));
         if (preferredHobbyIds.length > 0 && !hasCommonHobbies) continue;
 
+        // NEW: Map the language relationship IDs to the full language objects
         const profileLanguages = Array.isArray(bio.languages)
             ? bio.languages.map(lang => (lang ? languagesMap.get(lang.$id) : null)).filter(Boolean)
             : [];
 
-        // --- NEW: Apply isHideName check ---
-        let profileName = bio.name;
-        const profileSettings = settingsMap.get(currentProfileUserId);
-        if (profileSettings && profileSettings.isHideName) {
-            profileName = profileName ? `${profileName[0]}.` : '';
-        }
-
+        // --- UNIFIED PROFILE OBJECT CONSTRUCTION ---
         const profile = {
             userId: currentProfileUserId,
-            biodata: { ...bio, name: profileName },
+            biodata: bio,
             location: allOtherLocationsRes.documents.find(loc => loc.user && loc.user.$id === currentProfileUserId) || null,
-            images: imagesMap.get(currentProfileUserId) || [],
+            images: imagesMap.get(currentProfileUserId) || [], // All 6 images are now in this array
             hobbies: userHobbyIds.map((hid) => hobbiesMap.get(hid)).filter(Boolean),
             languages: profileLanguages,
-            prompts: promptsMap.get(currentProfileUserId) || [null, null, null, null, null, null, null],
-            settings: profileSettings || { isIncognito: false, isHideName: false }
+            prompts: promptsMap.get(currentProfileUserId) || [null, null, null, null, null, null, null]
         };
 
         filteredProfiles.push(profile);
@@ -295,17 +264,6 @@ const getNextBatchProfiles = async (userId, page = 0) => {
 const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
     const appwrite = new AppwriteService();
 
-    // 1. Get viewed user IDs from has-shown collection (still exclude seen profiles)
-    const viewedDocs = await appwrite.listDocuments(
-        APPWRITE_HAS_SHOWN_COLLECTION_ID,
-        [Query.equal("user", currentUserId)]
-    );
-    const viewedUserIds = new Set(
-        viewedDocs.documents
-            .map((doc) => (doc.who ? doc.who.$id : null))
-            .filter(Boolean)
-    );
-
     // 2. Fetch current user's biodata to get their gender
     const currentUserBiodataRes = await appwrite.listDocuments(
         APPWRITE_BIODATA_COLLECTION_ID,
@@ -328,7 +286,7 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
 
     let eligibleBiodataDocs = allBiodataDocsRes.documents.filter((bio) => {
         const userIdFromBiodata = bio.user ? bio.user.$id : null;
-        return userIdFromBiodata && !viewedUserIds.has(userIdFromBiodata);
+        return userIdFromBiodata;
     });
 
     if (eligibleBiodataDocs.length === 0) {
@@ -345,32 +303,26 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
     }
 
     let connectedUserIds = new Set();
-    let connectionsAsSenderRes = { documents: [] };
-    if (candidateUserIds.length > 0) {
-        connectionsAsSenderRes = await appwrite.listDocuments(
-            APPWRITE_CONNECTIONS_COLLECTION_ID, [
-            Query.equal("senderId", currentUserId),
-            Query.equal("receiverId", candidateUserIds),
-            Query.limit(5000),
-        ]);
-    }
+    const connectionsAsSenderRes = await appwrite.listDocuments(
+        APPWRITE_CONNECTIONS_COLLECTION_ID, [
+        Query.equal("senderId", currentUserId),
+        Query.equal("receiverId", candidateUserIds),
+        Query.limit(5000),
+    ]);
     connectionsAsSenderRes.documents.forEach((conn) => {
         if (conn.receiverId && conn.receiverId.$id) {
             connectedUserIds.add(conn.receiverId.$id);
         }
     });
 
-    let connectionsAsReceiverRes = { documents: [] };
-    if (candidateUserIds.length > 0) {
-        connectionsAsReceiverRes = await appwrite.listDocuments(
-            APPWRITE_CONNECTIONS_COLLECTION_ID,
-            [
-                Query.equal("receiverId", currentUserId),
-                Query.equal("senderId", candidateUserIds),
-                Query.limit(5000),
-            ]
-        );
-    }
+    const connectionsAsReceiverRes = await appwrite.listDocuments(
+        APPWRITE_CONNECTIONS_COLLECTION_ID,
+        [
+            Query.equal("receiverId", currentUserId),
+            Query.equal("senderId", candidateUserIds),
+            Query.limit(5000),
+        ]
+    );
     connectionsAsReceiverRes.documents.forEach((conn) => {
         if (conn.senderId && conn.senderId.$id) {
             connectedUserIds.add(conn.senderId.$id);
@@ -392,9 +344,8 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
         .filter(Boolean);
 
     let completedUserIds = new Set();
-    let completionStatusRes = { documents: [] };
     if (eligibleUserIds.length > 0) {
-        completionStatusRes = await appwrite.listDocuments(
+        const completionStatusRes = await appwrite.listDocuments(
             APPWRITE_COMPLETION_STATUS_COLLECTION_ID,
             [
                 Query.equal("user", eligibleUserIds),
@@ -402,12 +353,12 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
                 Query.limit(5000),
             ]
         );
+        completionStatusRes.documents.forEach((doc) => {
+            if (doc.user && doc.user.$id) {
+                completedUserIds.add(doc.user.$id);
+            }
+        });
     }
-    completionStatusRes.documents.forEach((doc) => {
-        if (doc.user && doc.user.$id) {
-            completedUserIds.add(doc.user.$id);
-        }
-    });
 
     eligibleBiodataDocs = eligibleBiodataDocs.filter((bio) => {
         const userIdFromBiodata = bio.user ? bio.user.$id : null;
@@ -418,34 +369,7 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
         return [];
     }
 
-    // --- NEW: Fetch settings for all candidate users for filtering and masking ---
-    const candidateUserIdsForSettings = eligibleBiodataDocs.map(bio => bio.user.$id).filter(Boolean);
-    let settingsRes = { documents: [] };
-    if (candidateUserIdsForSettings.length > 0) {
-        settingsRes = await appwrite.listDocuments(
-            APPWRITE_SETTINGS_COLLECTION_ID,
-            [Query.equal('user', candidateUserIdsForSettings), Query.limit(candidateUserIdsForSettings.length)]
-        );
-    }
-    const settingsMap = new Map();
-    settingsRes.documents.forEach(doc => {
-        if (doc.user) {
-            settingsMap.set(doc.user.$id, doc);
-        }
-    });
-
-    // --- NEW: Filter out incognito users from the final list of eligible profiles ---
-    eligibleBiodataDocs = eligibleBiodataDocs.filter(bio => {
-        const userIdFromBiodata = bio.user ? bio.user.$id : null;
-        const settings = settingsMap.get(userIdFromBiodata);
-        return !settings || !settings.isIncognito;
-    });
-
-    if (eligibleBiodataDocs.length === 0) {
-        return [];
-    }
-
-    // 4. Shuffle the remaining eligible biodata documents for randomization
+    // 4. Shuffle the eligible biodata documents for randomization (Fisher-Yates)
     for (let i = eligibleBiodataDocs.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [eligibleBiodataDocs[i], eligibleBiodataDocs[j]] = [
@@ -529,10 +453,18 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
         languagesRes.documents.forEach(doc => languagesMap.set(doc.$id, doc));
     }
 
-    // Collect all hobby IDs from selectedBiodataDocs
-    const allHobbyIds = selectedBiodataDocs.flatMap(bio =>
-        Array.isArray(bio.hobbies) ? bio.hobbies.map(h => h && h.$id).filter(Boolean) : []
-    );
+    // --- Bulletproof hobbies array handling ---
+    // Gather all unique hobby IDs from all selected biodata docs
+    const allHobbyIds = [];
+    selectedBiodataDocs.forEach(bio => {
+        if (Array.isArray(bio.hobbies) && bio.hobbies.length > 0) {
+            for (const h of bio.hobbies) {
+                if (h && h.$id) {
+                    allHobbyIds.push(h.$id);
+                }
+            }
+        }
+    });
 
     let hobbiesDocsRes = { documents: [] };
     if (allHobbyIds.length > 0) {
@@ -541,10 +473,15 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
             [Query.equal("$id", allHobbyIds), Query.limit(1000)]
         );
     }
+
     const hobbiesMap = new Map();
-    hobbiesDocsRes.documents.forEach((hobby) => {
-        hobbiesMap.set(hobby.$id, hobby);
-    });
+    if (Array.isArray(hobbiesDocsRes.documents)) {
+        hobbiesDocsRes.documents.forEach((hobby) => {
+            if (hobby && hobby.$id) {
+                hobbiesMap.set(hobby.$id, hobby);
+            }
+        });
+    }
 
     // 7. Construct the final profiles in the desired format
     const profiles = [];
@@ -553,30 +490,29 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
         const location = locationsMap.get(profileUserId) || null;
         const userImages = imagesMap.get(profileUserId) || [];
 
-        const userHobbyIds = Array.isArray(bio.hobbies)
-            ? bio.hobbies.map((h) => (h ? h.$id : null)).filter(Boolean)
-            : [];
+        // Bulletproof: always produce an array, even if hobbies is missing or not an array
+        let userHobbyIds = [];
+        if (Array.isArray(bio.hobbies) && bio.hobbies.length > 0) {
+            userHobbyIds = bio.hobbies
+                .map((h) => (h && h.$id ? h.$id : null))
+                .filter(Boolean);
+        }
 
         const profileLanguages = Array.isArray(bio.languages)
             ? bio.languages.map(lang => (lang ? languagesMap.get(lang.$id) : null)).filter(Boolean)
             : [];
 
-        // --- NEW: Apply isHideName check ---
-        let profileName = bio.name;
-        const profileSettings = settingsMap.get(profileUserId);
-        if (profileSettings && profileSettings.isHideName) {
-            profileName = profileName ? `${profileName[0]}.` : '';
-        }
-
+        // --- UNIFIED PROFILE OBJECT CONSTRUCTION ---
         const profile = {
             userId: profileUserId,
-            biodata: { ...bio, name: profileName },
+            biodata: bio,
             location: location,
-            images: userImages,
-            hobbies: userHobbyIds.map((hid) => hobbiesMap.get(hid)).filter(Boolean),
+            images: userImages, // All 6 images are now in this array
+            hobbies: Array.isArray(userHobbyIds) && userHobbyIds.length > 0
+                ? userHobbyIds.map((hid) => hobbiesMap.get(hid)).filter(Boolean)
+                : [],
             languages: profileLanguages,
-            prompts: promptsMap.get(profileUserId) || [null, null, null, null, null, null, null],
-            settings: profileSettings || { isIncognito: false, isHideName: false }
+            prompts: promptsMap.get(profileUserId) || [null, null, null, null, null, null, null]
         };
 
         profiles.push(profile);
@@ -584,6 +520,7 @@ const getRandomProfilesSimple = async (currentUserId, limit = PAGE_SIZE) => {
 
     // 8. Update has-shown for the profiles actually returned
     for (const profile of profiles) {
+        console.log(profile);
         const existingHasShownRes = await appwrite.listDocuments(
             APPWRITE_HAS_SHOWN_COLLECTION_ID,
             [Query.equal("user", currentUserId), Query.equal("who", profile.userId)]
@@ -607,5 +544,3 @@ module.exports = {
     getNextBatchProfiles,
     getRandomProfilesSimple,
 };
-
-
