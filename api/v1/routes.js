@@ -262,7 +262,7 @@ module.exports = (app) => {
 
 
   // Environment variables (dart-define prefix removed conceptually)
-  app.get("/api/v1/env",  (_, res) => {
+  app.get("/api/v1/env", verifyAppwriteJWT, (_, res) => {
     const keys = [
       "APPWRITE_ENDPOINT",
       "STORAGE_BUCKETID",
