@@ -65,13 +65,14 @@ const sendInvitation = async (senderUserId, receiverUserId) => {
                 ID.unique(),                          // messageId (valid format)
                 'New Invitation!',                    // title (string, 1–256 chars)
                 `${senderName} has sent you an invitation!`, // body
-                [`users_${receiverUserId}`],           // topics
+                ['global_notifications'],            // topics
                 [],                                    // users (none in this case)
                 [],                                    // targets (none in this case)
                 {                                      // data payload
                     type: 'new_invitation',
                     senderId: senderUserId,
-                    senderName: senderName
+                    senderName: senderName,
+                    receiverId: receiverUserId
                 },
                 undefined, // action
                 undefined, // image

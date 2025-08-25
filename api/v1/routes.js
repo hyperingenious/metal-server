@@ -259,38 +259,4 @@ module.exports = (app) => {
       res.status(error.code || 500).json({ error: error.message || "Failed to fetch chat messages" });
     }
   });
-
-
-  // Environment variables (dart-define prefix removed conceptually)
-  app.get("/api/v1/env", verifyAppwriteJWT, (_, res) => {
-    const keys = [
-      "APPWRITE_ENDPOINT",
-      "STORAGE_BUCKETID",
-      "PROJECT_ID",
-      "DATABASE_ID",
-      "BIODATA_COLLECTIONID",
-      "BLOCKED_COLLECTIONID",
-      "COMPLETION_STATUS_COLLECTIONID",
-      "CONNECTIONS_COLLECTIONID",
-      "HAS_SHOWN_COLLECTIONID",
-      "HOBBIES_COLLECTIONID",
-      "IMAGE_COLLECTIONID",
-      "LOCATION_COLLECTIONID",
-      "MESSAGE_INBOX_COLLECTIONID",
-      "MESSAGES_COLLECTIONID",
-      "NOTIFICATIONS_COLLECTIONID",
-      "PREFERENCE_COLLECTIONID",
-      "REPORTS_COLLECTIONID",
-      "USERS_COLLECTIONID",
-      "UPDATE_NOW_COLLECTIONID",
-      "PROMPTS_COLLECTIONID",
-      "SETTINGS_COLLECTIONID",
-    ];
-
-    const result = {};
-    for (const k of keys) {
-      if (process.env[k] !== undefined) result[k] = process.env[k];
-    }
-    res.status(200).json(result);
-  });
 };
