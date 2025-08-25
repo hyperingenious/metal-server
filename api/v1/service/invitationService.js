@@ -61,36 +61,24 @@ const sendInvitation = async (senderUserId, receiverUserId) => {
             const senderUserDoc = await appwrite.getDocument(APPWRITE_USERS_COLLECTION_ID, senderUserId);
             const senderName = senderUserDoc?.name || 'Someone';
 
+            // **CORRECTION**: Re-ordered parameters to match the correct createPush signature
             await messaging.createPush(
-                ID.unique(),                          // messageId (valid format)
-                'New Invitation!',                    // title (string, 1–256 chars)
-                `${senderName} has sent you an invitation!`, // body
-                ['global_notifications'],            // topics
-                [],                                    // users (none in this case)
-                [],                                    // targets (none in this case)
-                {                                      // data payload
-                    type: 'new_invitation',
-                    senderId: senderUserId,
-                    senderName: senderName,
-                    receiverId: receiverUserId
+                [`global_notifications`], // 1. topics (array)
+                'New Invitation!',           // 2. title (string)
+                `${senderName} has sent you an invitation!`, // 3. body (string)
+                {                            // 4. data (object)
+                    data: {
+                        type: 'new_invitation',
+                        senderId: senderUserId,
+                        senderName: senderName
+                    }
                 },
-                undefined, // action
-                undefined, // image
-                undefined, // icon
-                undefined, // sound
-                undefined, // color
-                undefined, // tag
-                undefined, // badge
-                false,     // draft
-                undefined, // scheduledAt
-                false,     // contentAvailable
-                false,     // critical
-                'normal'   // priority
+                [FCM_PROVIDER_ID]            // 5. providers (array)
             );
 
-            console.log(`Push notification sent to ${receiverUserId} for new invitation.`);
+            console.log(`Push notification sent to global_notifications for new invitation.`);
         } catch (pushError) {
-            console.error(`Failed to send push notification to ${receiverUserId} for invitation:`, pushError.message);
+            console.error(`Failed to send push notification to global_notifications for invitation:`, pushError.message);
         }
         // --- PUSH NOTIFICATION TRIGGER END ---
     }
