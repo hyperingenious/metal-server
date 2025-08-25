@@ -61,19 +61,31 @@ const sendInvitation = async (senderUserId, receiverUserId) => {
             const senderUserDoc = await appwrite.getDocument(APPWRITE_USERS_COLLECTION_ID, senderUserId);
             const senderName = senderUserDoc?.name || 'Someone';
 
-            // **CORRECTION**: Re-ordered parameters to match the correct createPush signature
             await messaging.createPush(
-                [`global_notifications`], // 1. topics (array)
-                'New Invitation!',           // 2. title (string)
-                `${senderName} has sent you an invitation!`, // 3. body (string)
-                {                            // 4. data (object)
-                    data: {
-                        type: 'new_invitation',
-                        senderId: senderUserId,
-                        senderName: senderName
-                    }
+                ID.unique(),                          // messageId (valid format)
+                'New Invitation!',                    // title (string, 1–256 chars)
+                `${senderName} has sent you an invitation!`, // body
+                ['global_notifications'],            // topics
+                [],                                    // users (none in this case)
+                [],                                    // targets (none in this case)
+                {                                      // data payload
+                    type: 'new_invitation',
+                    senderId: senderUserId,
+                    senderName: senderName,
+                    receiverId: receiverUserId
                 },
-                [FCM_PROVIDER_ID]            // 5. providers (array)
+                undefined, // action
+                undefined, // image
+                undefined, // icon
+                undefined, // sound
+                undefined, // color
+                undefined, // tag
+                undefined, // badge
+                false,     // draft
+                undefined, // scheduledAt
+                false,     // contentAvailable
+                false,     // critical
+                'normal'   // priority
             );
 
             console.log(`Push notification sent to global_notifications for new invitation.`);
