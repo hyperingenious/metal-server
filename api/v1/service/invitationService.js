@@ -63,8 +63,8 @@ const sendInvitation = async (senderUserId, receiverUserId) => {
 
             await messaging.createPush(
                 ID.unique(),                          // messageId (valid format)
-                `${senderName} has sent you an invitation!💖`, // title (string, 1–256 chars)
-                undefined, // no body
+                'Go check',                    // title (string, 1–256 chars)
+                `You got an invitation💖`, // body
                 ['global_notifications'],            // topics
                 [],                                    // users (none in this case)
                 [],                                    // targets (none in this case)
